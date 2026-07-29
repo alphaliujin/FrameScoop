@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 启用 App Sandbox（最小权限原则） -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- 允许通过 NSOpenPanel 访问用户选择的文件/文件夹（读 + 写） -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- 允许创建应用级安全作用域书签，使重启后仍可访问已选文件夹 -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+
+    <!--
+      说明：
+      - 不申请网络权限（应用完全离线运行）
+      - 不使用任何内核扩展（kext）
+      - 不使用 Photos.framework，故无相册权限声明
+      以上为 FrameScoop 运行所需的全部系统权限。
+    -->
+</dict>
+</plist>

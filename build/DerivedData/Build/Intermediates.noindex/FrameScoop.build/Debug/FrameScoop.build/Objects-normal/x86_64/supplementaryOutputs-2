@@ -1,0 +1,23 @@
+{
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/FrameScoopApp.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FrameScoopApp.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FrameScoopApp.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FrameScoopApp.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FrameScoopApp.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FrameScoopApp.swiftdeps"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/FolderMonitorService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FolderMonitorService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FolderMonitorService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FolderMonitorService.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FolderMonitorService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/FolderMonitorService.swiftdeps"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/EmptyStateView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/EmptyStateView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/EmptyStateView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/EmptyStateView.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/EmptyStateView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/x86_64/EmptyStateView.swiftdeps"
+  }
+}

@@ -1,0 +1,259 @@
+{
+  "" : {
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary.dia",
+    "emit-module-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary-emit-module.dia",
+    "pch" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary.swiftdeps"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/App/AppearanceConfigurator.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/AppearanceConfigurator~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/App/NotificationNames.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/NotificationNames~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/FrameScoopApp.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FrameScoopApp~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/FolderNode.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderNode~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/ImageMetadata.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/PhotoFolder.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoFolder~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/PhotoItem.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoItem~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/SortOption.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SortOption~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/FolderMonitorService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/FolderMonitorService~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/MetadataService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/PhotoLoadService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLoadService~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/ThumbnailCacheService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailCacheService~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Utilities/BookmarkStore.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/BookmarkStore~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Utilities/ShellExecutor.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ShellExecutor~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Utilities/ThumbnailGenerator.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ThumbnailGenerator~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/ViewModels/PhotoLibraryViewModel.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoLibraryViewModel~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/ContentView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/EmptyStateView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/EmptyStateView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/MetadataPanelView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/PhotoDetailView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoDetailView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/PhotoGridView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoGridView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/PhotoThumbnailCell.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/PhotoThumbnailCell~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/SettingsView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/SidebarView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/SidebarView~partial.swiftmodule"
+  },
+  "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

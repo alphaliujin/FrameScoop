@@ -1,0 +1,23 @@
+{
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Models/ImageMetadata.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/ImageMetadata.swiftdeps"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Services/MetadataService.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataService.swiftdeps"
+  },
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/Views/MetadataPanelView.swift" : {
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.dia",
+    "object" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.o",
+    "swift-dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Debug/FrameScoop.build/Objects-normal/arm64/MetadataPanelView.swiftdeps"
+  }
+}

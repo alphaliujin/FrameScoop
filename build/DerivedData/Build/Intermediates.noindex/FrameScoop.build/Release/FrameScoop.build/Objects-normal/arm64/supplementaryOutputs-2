@@ -1,0 +1,12 @@
+{
+  "/Users/alpha/codespace/FrameScoop/FrameScoop/App/AppearanceConfigurator.swift" : {
+    "abi-baseline-json" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop.abi.json",
+    "const-values" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary.swiftconstvalues",
+    "dependencies" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary.d",
+    "diagnostics" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop-primary.dia",
+    "objc-header" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop-Swift.h",
+    "swiftdoc" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop.swiftdoc",
+    "swiftmodule" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop.swiftmodule",
+    "swiftsourceinfo" : "/Users/alpha/codespace/FrameScoop/build/DerivedData/Build/Intermediates.noindex/FrameScoop.build/Release/FrameScoop.build/Objects-normal/arm64/FrameScoop.swiftsourceinfo"
+  }
+}
