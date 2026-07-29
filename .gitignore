@@ -7,6 +7,9 @@ DerivedData/
 *.xcuserstate
 *.xcscmblueprint
 
+# XcodeGen 生成工程（由 project.yml 现场生成,克隆后运行 generate_project.sh）
+*.xcodeproj/
+
 # Xcode 用户状态（不随仓库走）
 xcuserdata/
 
