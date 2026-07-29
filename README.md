@@ -190,6 +190,14 @@ cd build/DerivedData/Build/Products/Release
 ditto -c -k --keepParent FrameScoop.app FrameScoop.zip
 ```
 
+打成 DMG（推荐，可拖拽安装）：
+```bash
+# 自动构建 Release + 生成含 Applications 快捷方式的 .dmg
+bash Scripts/package_dmg.sh
+# 产物：build/FrameScoop.dmg（UDZO 压缩，已校验）
+```
+脚本会尝试设置 Finder 拖拽安装布局（app 与 Applications 左右排列）；无 GUI 环境下自动回退默认布局，不影响出包。
+
 ### 步骤 5：公证与去 Gatekeeper 拦截（需 Apple 开发者账号）
 
 > 公证使应用在他人机器上首次打开时不被 Gatekeeper 拦截。
@@ -269,7 +277,8 @@ bash Scripts/remove_quarantine.sh /path/to/FrameScoop.app
 | 生成工程 | `bash Scripts/generate_project.sh` |
 | Debug 编译 | `bash Scripts/build.sh` |
 | Release 编译 | `CONFIG=Release bash Scripts/build.sh` |
-| 构建并运行 | `bash Scripts/run.sh` |
+| 构建+运行 | `bash Scripts/run.sh` |
+| 打包 DMG | `bash Scripts/package_dmg.sh` |
 | 签名+公证 | `bash Scripts/notarize.sh` |
 | 清除隔离 | `bash Scripts/remove_quarantine.sh [path.app]` |
 | 验证签名 | `codesign -dv --strict path.app` |

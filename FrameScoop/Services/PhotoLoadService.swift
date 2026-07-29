@@ -111,24 +111,30 @@ struct PhotoLoadService {
 
     /// 递归构建文件夹的子目录树（仅目录，不枚举图片文件，速度快）。
     /// 用于侧边栏「逐级展开」。调用前须确保该文件夹的安全作用域已激活。
-    /// - Parameter url: 已激活安全作用域的文件夹 URL
+    /// - Parameters:
+    ///   - url: 已激活安全作用域的文件夹 URL
+    ///   - depth: 当前递归深度，用于防止极深目录树导致栈溢出
     /// - Returns: 子目录节点数组（按名称排序）；无子目录返回空数组
-    static func buildFolderTree(url: URL) -> [FolderNode] {
+    static func buildFolderTree(url: URL, depth: Int = 0) -> [FolderNode] {
+        // 深度上限：防止异常深度目录树（或符号链接环）造成递归过深
+        guard depth < 32 else { return [] }
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(
             at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
             options: [.skipsHiddenFiles]
         ) else {
             return []
         }
-        let subdirs = contents.filter {
-            ((try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory) == true
+        let subdirs = contents.filter { entry in
+            let rv = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            // 仅进入真实子目录，跳过符号链接，避免链接环导致无限递归
+            return rv?.isSymbolicLink == false && rv?.isDirectory == true
         }.sorted {
             $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
         }
         return subdirs.map { sub in
-            let childTree = buildFolderTree(url: sub)
+            let childTree = buildFolderTree(url: sub, depth: depth + 1)
             return FolderNode(
                 id: sub.path,
                 name: sub.lastPathComponent,

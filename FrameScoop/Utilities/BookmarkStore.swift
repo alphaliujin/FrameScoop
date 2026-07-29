@@ -44,15 +44,16 @@ final class BookmarkStore {
     /// 解析书签为可访问的 URL。
     /// - Important: 调用方获得 URL 后须 `startAccessingSecurityScopedResource()`，
     ///   使用完毕后调用 `stopAccessingSecurityScopedResource()`。
-    /// - Returns: 解析后的 URL；书签失效返回 nil（上层可提示用户重新添加）
-    func resolveURL(for folder: PhotoFolder) -> URL? {
+    /// - Returns: 解析后的 URL 及书签是否陈旧；书签失效返回 nil（上层可提示用户重新添加）。
+    ///   `isStale` 为 true 时 URL 仍可用，但调用方应重新生成书签并持久化。
+    func resolveURL(for folder: PhotoFolder) -> (url: URL, isStale: Bool)? {
         var stale = false
         do {
             let url = try URL(resolvingBookmarkData: folder.bookmarkData,
                               options: [.withSecurityScope],
                               relativeTo: nil,
                               bookmarkDataIsStale: &stale)
-            return url
+            return (url, stale)
         } catch {
             #if DEBUG
             print("[BookmarkStore] 解析书签失败: \(error.localizedDescription)")

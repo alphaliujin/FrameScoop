@@ -81,8 +81,11 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 用户添加的根文件夹（含书签，持久化）
     private var roots: [PhotoFolder] = []
 
-    /// 已激活安全作用域的根 URL（与 roots 一一对应），常驻保持以支持子目录访问
-    private var activeRootURLs: [URL] = []
+    /// 已激活安全作用域的根 URL，与 roots 按索引一一对应；书签解析失败时为 nil（仍占位以保持对齐）
+    private var activeRootURLs: [URL?] = []
+
+    /// 文件夹内容加载的版本号：每次发起新加载递增，回调时校验，丢弃过期的异步结果
+    private var loadToken = 0
 
     private let settingsKey = "FrameScoop.settings"
 
@@ -153,12 +156,14 @@ final class PhotoLibraryViewModel: ObservableObject {
             roots.append(folder)
             bookmarkStore.saveAll(roots)
 
-            // 激活该根的安全作用域并记录
+            // 激活该根的安全作用域并记录；与 roots 保持索引对齐（解析失败时占位 nil）
             var resolvedPath: String? = nil
-            if let resolved = bookmarkStore.resolveURL(for: folder) {
+            if let (resolved, _) = bookmarkStore.resolveURL(for: folder) {
                 _ = resolved.startAccessingSecurityScopedResource()
                 activeRootURLs.append(resolved)
                 resolvedPath = resolved.path
+            } else {
+                activeRootURLs.append(nil)
             }
             rebuildTree()
             selectedNodeID = resolvedPath ?? url.path   // 触发 onChange -> loadContent
@@ -170,11 +175,11 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 移除根文件夹（仅根节点可移除）
     func removeRoot(by rootID: UUID) {
         guard let idx = roots.firstIndex(where: { $0.id == rootID }) else { return }
-        // 停止该根的安全作用域
-        if idx < activeRootURLs.count {
-            activeRootURLs[idx].stopAccessingSecurityScopedResource()
-            activeRootURLs.remove(at: idx)
+        // 停止该根的安全作用域（解析失败的根为 nil，跳过）
+        if idx < activeRootURLs.count, let url = activeRootURLs[idx] {
+            url.stopAccessingSecurityScopedResource()
         }
+        activeRootURLs.remove(at: idx)
         roots.remove(at: idx)
         bookmarkStore.saveAll(roots)
         rebuildTree()
@@ -194,20 +199,30 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     // MARK: - 安全作用域与树构建
 
-    /// 激活所有根文件夹的安全作用域
+    /// 激活所有根文件夹的安全作用域。
+    /// 解析失败的根以 nil 占位，保持与 roots 索引一一对应，避免后续错配。
     private func startAllRootScopes() {
         stopAllRootScopes()
-        activeRootURLs = []
-        for root in roots {
-            if let resolved = bookmarkStore.resolveURL(for: root) {
-                _ = resolved.startAccessingSecurityScopedResource()
-                activeRootURLs.append(resolved)
+        var staleRefresh: [(index: Int, url: URL)] = []
+        activeRootURLs = roots.enumerated().map { index, root in
+            guard let (resolved, stale) = bookmarkStore.resolveURL(for: root) else { return nil }
+            _ = resolved.startAccessingSecurityScopedResource()
+            if stale { staleRefresh.append((index, resolved)) }
+            return resolved
+        }
+        // 在循环外刷新陈旧书签，避免 map 期间修改 roots
+        for item in staleRefresh {
+            if let newBookmark = try? bookmarkStore.makeBookmark(for: item.url) {
+                roots[item.index].bookmarkData = newBookmark
             }
         }
+        if !staleRefresh.isEmpty { bookmarkStore.saveAll(roots) }
     }
 
     private func stopAllRootScopes() {
-        for url in activeRootURLs { url.stopAccessingSecurityScopedResource() }
+        for case let url? in activeRootURLs {
+            url.stopAccessingSecurityScopedResource()
+        }
         activeRootURLs = []
     }
 
@@ -216,7 +231,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         var tree: [FolderNode] = []
         for (index, root) in roots.enumerated() {
             guard index < activeRootURLs.count else { continue }
-            let resolved = activeRootURLs[index]
+            // 书签解析失败的根（activeRootURLs[index] 为 nil）跳过，
+            // 避免名字与 URL 错配（张冠李戴）
+            guard let resolved = activeRootURLs[index] else { continue }
             let children = PhotoLoadService.buildFolderTree(url: resolved)
             tree.append(FolderNode(
                 id: resolved.path,
@@ -268,8 +285,12 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     private func loadPhotos(from url: URL) {
         isLoading = true
+        loadToken += 1
+        let token = loadToken
         Task {
             let items = await loadService.loadPhotos(from: url)
+            // 丢弃过期结果：快速切换文件夹时旧加载可能后完成，避免覆盖新内容
+            guard token == loadToken else { return }
             self.photos = items
             self.isLoading = false
         }
@@ -350,16 +371,97 @@ final class PhotoLibraryViewModel: ObservableObject {
     func trashPhotos(_ ids: Set<UUID>) {
         let urls = photos.filter { ids.contains($0.id) }.map { $0.url }
         guard !urls.isEmpty else { return }
+        var failedCount = 0
         for url in urls {
             var resultingURL: NSURL?
             do {
                 try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
             } catch {
-                errorMessage = "无法移到废纸篓：\(error.localizedDescription)"
-                return
+                failedCount += 1
             }
         }
+        // 无论部分成功与否都刷新网格，使已删除的从界面移除
         reloadCurrentFolder()
+        if failedCount > 0 {
+            errorMessage = "有 \(failedCount) 张图片无法移到废纸篓"
+        }
+    }
+
+    // MARK: - 发送 / 分享
+
+    /// 当前选中图片的文件 URL
+    var selectedURLs: [URL] {
+        photos.filter { selectedPhotoIDs.contains($0.id) }.map { $0.url }
+    }
+
+    /// 导出到指定文件夹：弹出 NSOpenPanel 选择目标目录，复制选中图片。
+    func exportSelectionToFolder() {
+        let urls = selectedURLs
+        guard !urls.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "导出到此文件夹"
+        panel.message = "将选中的 \(urls.count) 张图片复制到该文件夹。"
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+
+        // 用户选择的目标目录需激活安全作用域以写入
+        let started = dest.startAccessingSecurityScopedResource()
+        defer { if started { dest.stopAccessingSecurityScopedResource() } }
+
+        do {
+            for src in urls {
+                let target = uniqueDestinationURL(in: dest, for: src)
+                try FileManager.default.copyItem(at: src, to: target)
+            }
+        } catch {
+            errorMessage = "导出失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// 生成不冲突的目标路径（同名自动加序号）
+    private func uniqueDestinationURL(in dir: URL, for src: URL) -> URL {
+        let candidate = dir.appendingPathComponent(src.lastPathComponent)
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: candidate.path) else { return candidate }
+        let base = src.deletingPathExtension().lastPathComponent
+        let ext = src.pathExtension
+        var i = 2
+        while true {
+            let name = ext.isEmpty ? "\(base) \(i)" : "\(base) \(i).\(ext)"
+            let c = dir.appendingPathComponent(name)
+            if !fm.fileExists(atPath: c.path) { return c }
+            i += 1
+        }
+    }
+
+    /// 复制到剪贴板：复制文件 URL；单张时额外复制图片，便于粘贴到聊天/编辑器。
+    func copySelectionToClipboard() {
+        let urls = selectedURLs
+        guard !urls.isEmpty else { return }
+        let single = urls.count == 1 ? urls.first : nil
+        Task.detached {
+            let image = single.flatMap { NSImage(contentsOf: $0) }
+            await MainActor.run {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                var writers: [NSPasteboardWriting] = urls.map { $0 as NSURL }
+                if let image { writers.append(image as NSPasteboardWriting) }
+                pb.writeObjects(writers)
+            }
+        }
+    }
+
+    /// 作为邮件附件发送
+    func sendSelectionViaEmail() {
+        let urls = selectedURLs
+        guard !urls.isEmpty else { return }
+        guard let service = NSSharingService(named: .composeEmail) else {
+            errorMessage = "未找到邮件应用。"
+            return
+        }
+        SharingServiceHelper.shared.perform(service, items: urls)
     }
 
     // MARK: - 排序

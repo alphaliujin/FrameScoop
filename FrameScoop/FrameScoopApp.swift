@@ -24,6 +24,13 @@ struct FrameScoopApp: App {
             ContentView()
                 .environmentObject(library)
                 .frame(minWidth: 960, minHeight: 620)
+                .onOpenURL { url in
+                    // 支持将文件夹拖入 Dock 图标或经 Finder「打开方式」直接加入侧边栏
+                    //（Info.plist 中 CFBundleDocumentTypes 声明了 public.folder 文档类型）
+                    if url.hasDirectoryPath {
+                        library.addRootURL(url)
+                    }
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: false))

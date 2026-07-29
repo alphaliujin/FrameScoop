@@ -2,8 +2,8 @@
 //  PhotoGridView.swift
 //  FrameScoop
 //
-//  图片网格视图：自适应列数的瀑布/网格，模仿“照片”App 内容区。
-//  顶部工具栏：排序、缩略图尺寸、视图切换、添加文件夹。
+//  缩略图区域视图：自适应列数的图片网格，模仿“照片”App 内容区，填充 NavigationSplitView 的 detail 列。
+//  顶部工具栏：排序、缩略图尺寸、刷新。
 //
 
 import SwiftUI
@@ -113,6 +113,19 @@ struct PhotoGridView: View {
                 library.reloadCurrentFolder()
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
+            }
+
+            // 选中图片时显示「发送」菜单（右上角）
+            if !library.selectedURLs.isEmpty {
+                Menu {
+                    Button("导出到指定文件夹…") { library.exportSelectionToFolder() }
+                    Button("复制到剪贴板") { library.copySelectionToClipboard() }
+                    Divider()
+                    Button("作为邮件附件发送") { library.sendSelectionViaEmail() }
+                } label: {
+                    Label("发送", systemImage: "square.and.arrow.up")
+                }
+                .help("发送选中的 \(library.selectedURLs.count) 张图片")
             }
         }
     }
