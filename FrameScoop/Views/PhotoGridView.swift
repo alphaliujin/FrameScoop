@@ -114,13 +114,6 @@ struct PhotoGridView: View {
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
             }
-
-            // 添加文件夹
-            Button {
-                library.addFolder()
-            } label: {
-                Label("添加", systemImage: "plus")
-            }
         }
     }
 }
