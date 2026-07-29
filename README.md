@@ -111,9 +111,9 @@ FrameScoop/
 | 资源 | 路径 | 说明 |
 | --- | --- | --- |
 | 强调色 | `Assets.xcassets/AccentColor.colorset/` | 浅色/深色模式各一套 sRGB 蓝色强调色，由 `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME` 引用 |
-| App 图标 | `Resources/AppIcon.icns` | 由 `Scripts/generate_icon.sh` 用 Core Graphics 绘制 1024 主图 + `sips` 缩放 + `iconutil` 打包而成；`Info.plist` 中 `CFBundleIconFile=AppIcon` 引用 |
+| App 图标 | `Resources/AppIcon.icns` | 由 `Scripts/generate_icon.sh` 生成：优先用项目根目录的 `FC.png`（缩放至 1024 + `sips` 各尺寸 + `iconutil` 打包）；无 `FC.png` 时回退到 Core Graphics 占位图。`Info.plist` 中 `CFBundleIconFile=AppIcon` 引用 |
 
-> 图标为脚本生成的占位设计，可直接替换 `AppIcon.icns` 为自有图标。
+> 替换图标：用同名 `FC.png` 覆盖项目根目录文件后，删除 `FrameScoop/Resources/AppIcon.icns` 并重新构建即可。
 > 采用 `.icns` + `CFBundleIconFile` 而非 asset catalog 单尺寸 AppIcon，是为兼容不同 Xcode SDK 的资产编译器，保证图标稳定嵌入。
 
 ---
