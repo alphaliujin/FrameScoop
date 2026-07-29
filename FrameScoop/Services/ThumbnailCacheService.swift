@@ -39,20 +39,22 @@ final class ThumbnailCacheService {
 
     /// 获取缩略图：命中缓存立即返回，否则后台生成后返回。
     func thumbnail(for url: URL, maxPixel: Int) async -> NSImage? {
-        let key = cacheKey(url: url, maxPixel: maxPixel)
+        // 1. 后台：计算 key（含一次 stat）并检查内存/磁盘缓存。
+        //    将 stat、磁盘读、PNG 解码都移出主线程，避免快速滚动时阻塞 UI。
+        let (key, hit): (String, NSImage?) = await Task.detached(priority: .userInitiated) { [self] in
+            let key = self.cacheKey(url: url, maxPixel: maxPixel)
+            if let cached = self.memoryCache.object(forKey: key as NSString) {
+                return (key, cached)
+            }
+            if let disk = self.readFromDisk(key: key) {
+                self.memoryCache.setObject(disk, forKey: key as NSString)
+                return (key, disk)
+            }
+            return (key, nil)
+        }.value
+        if let hit { return hit }
 
-        // 1. 内存命中
-        if let cached = memoryCache.object(forKey: key as NSString) {
-            return cached
-        }
-
-        // 2. 磁盘命中
-        if let disk = readFromDisk(key: key) {
-            memoryCache.setObject(disk, forKey: key as NSString)
-            return disk
-        }
-
-        // 3. 去重 + 后台生成（原子 get-or-create，避免并发重复生成）
+        // 2. 未命中：去重 + 后台生成（原子 get-or-create，避免并发重复生成）
         let task = await inFlight.getOrCreate(key) { [diskCacheDir] in
             Task.detached(priority: .userInitiated) { [weak self] in
                 let image = ThumbnailGenerator.generate(url: url, maxPixel: maxPixel)

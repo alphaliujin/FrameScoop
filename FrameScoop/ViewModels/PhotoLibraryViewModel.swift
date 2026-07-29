@@ -31,7 +31,13 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var selectedNodeID: String?
 
     /// 当前选中文件夹的图片（未排序原始顺序，含下级目录）
-    @Published var photos: [PhotoItem] = []
+    @Published var photos: [PhotoItem] = [] {
+        didSet { rebuildDisplayedPhotos() }
+    }
+
+    /// 排序后的展示列表（缓存）：仅在 photos / sortOption / sortOrder 变化时重算。
+    /// 避免每次访问都重新排序（网格、胶片条、currentPhotoIndex 都会读取它）。
+    @Published private(set) var displayedPhotos: [PhotoItem] = []
 
     /// 多选中的图片 id
     @Published var selectedPhotoIDs: Set<UUID> = []
@@ -47,10 +53,10 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     /// 排序维度 / 方向
     @Published var sortOption: SortOption = .dateModified {
-        didSet { persistSettings() }
+        didSet { persistSettings(); rebuildDisplayedPhotos() }
     }
     @Published var sortOrder: SortOrder = .descending {
-        didSet { persistSettings() }
+        didSet { persistSettings(); rebuildDisplayedPhotos() }
     }
 
     /// 缩略图尺寸档位
@@ -116,12 +122,7 @@ final class PhotoLibraryViewModel: ObservableObject {
         return findNode(id: id, in: folderTree)
     }
 
-    /// 排序后的展示列表
-    var displayedPhotos: [PhotoItem] {
-        sort(photos)
-    }
-
-    /// 当前图片在 displayedPhotos 中的索引
+    /// 当前图片在 displayedPhotos 中的索引（读取缓存的排序数组，仅线性查找）
     var currentPhotoIndex: Int? {
         guard let current = currentPhoto else { return nil }
         return displayedPhotos.firstIndex(where: { $0.id == current.id })
@@ -286,7 +287,12 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     /// 获取节点的预览缩略图（取该文件夹首图）。
     func previewThumbnail(for node: FolderNode) async -> NSImage? {
-        guard let firstImage = PhotoLoadService.firstImageURL(in: node.url) else { return nil }
+        let url = node.url
+        // firstImageURL 是递归目录枚举，放到后台线程避免阻塞 UI（与 countImages 一致）
+        let firstImage = await Task.detached(priority: .utility) {
+            PhotoLoadService.firstImageURL(in: url)
+        }.value
+        guard let firstImage else { return nil }
         return await ThumbnailCacheService.shared.thumbnail(for: firstImage, maxPixel: 96)
     }
 
@@ -358,20 +364,41 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     // MARK: - 排序
 
+    /// 重算缓存的排序结果（在 photos / sortOption / sortOrder 变化时由 didSet 调用）
+    private func rebuildDisplayedPhotos() {
+        displayedPhotos = sort(photos)
+    }
+
     private func sort(_ items: [PhotoItem]) -> [PhotoItem] {
-        let sorted = items.sorted { lhs, rhs in
-            switch sortOption {
-            case .name:
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            case .size:
-                return lhs.size < rhs.size
-            case .dateCreated:
-                return (lhs.creationDate ?? .distantPast) < (rhs.creationDate ?? .distantPast)
-            case .dateModified:
-                return (lhs.modificationDate ?? .distantPast) < (rhs.modificationDate ?? .distantPast)
-            }
+        let ascending = sortOrder == .ascending
+        // 直接按目标方向比较，避免 sorted + reversed() 产生第二次 O(n) 数组分配
+        return items.sorted { lhs, rhs in
+            let cmp = baseCompare(lhs, rhs)
+            return ascending ? (cmp == .orderedAscending) : (cmp == .orderedDescending)
         }
-        return sortOrder == .ascending ? sorted : sorted.reversed()
+    }
+
+    /// 升序比较基准（lhs 在 rhs 之前返回 .orderedAscending）
+    private func baseCompare(_ lhs: PhotoItem, _ rhs: PhotoItem) -> ComparisonResult {
+        switch sortOption {
+        case .name:
+            return lhs.name.localizedStandardCompare(rhs.name)
+        case .size:
+            if lhs.size < rhs.size { return .orderedAscending }
+            if lhs.size > rhs.size { return .orderedDescending }
+            return .orderedSame
+        case .dateCreated:
+            return Self.compareDates(lhs.creationDate, rhs.creationDate)
+        case .dateModified:
+            return Self.compareDates(lhs.modificationDate, rhs.modificationDate)
+        }
+    }
+
+    private static func compareDates(_ lhs: Date?, _ rhs: Date?) -> ComparisonResult {
+        let l = lhs ?? .distantPast, r = rhs ?? .distantPast
+        if l < r { return .orderedAscending }
+        if l > r { return .orderedDescending }
+        return .orderedSame
     }
 
     // MARK: - 设置持久化

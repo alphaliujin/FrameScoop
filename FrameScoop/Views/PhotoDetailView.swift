@@ -169,8 +169,9 @@ struct PhotoDetailView: View {
     private var filmstrip: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(Array(library.displayedPhotos.enumerated()), id: \.element.id) { idx, item in
+                // LazyHStack：仅实例化可见的胶片条单元，避免对整个图库都创建视图/加载任务
+                LazyHStack(spacing: 6) {
+                    ForEach(library.displayedPhotos) { item in
                         FilmstripThumbnail(item: item, isCurrent: item.id == photo.id)
                             .frame(width: 64, height: 64)
                             .onTapGesture { library.openPhoto(item) }
@@ -193,16 +194,15 @@ struct PhotoDetailView: View {
 
     private func loadImageAndMetadata() async {
         resetTransform()
-        // 大图在后台加载，避免卡顿
         let url = photo.url
-        let loadedImage = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+        // 并发加载大图与元数据，缩短等待
+        async let loadedImage = Task.detached(priority: .userInitiated) { () -> NSImage? in
             NSImage(contentsOf: url)
         }.value
-        image = loadedImage
-
-        // 异步加载元数据（含 mdls 调用，全程异常安全）
-        let meta = await library.loadMetadata(for: url)
-        metadata = meta
+        async let meta = library.loadMetadata(for: url)
+        let (img, md) = await (loadedImage, meta)
+        image = img
+        metadata = md
     }
 
     private func resetTransform() {
