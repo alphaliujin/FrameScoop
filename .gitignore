@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Xcode 构建产物（本项目 -derivedDataPath 指向 build/）
+build/
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+
+# Xcode 用户状态（不随仓库走）
+xcuserdata/
+
+# Swift Package Manager（预留）
+.swiftpm/
+.build/
+Package.resolved
+
+# CocoaPods（预留）
+Pods/
+
+# 本地工具设置（不随仓库走）
+.claude/settings.local.json
