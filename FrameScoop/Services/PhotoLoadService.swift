@@ -62,9 +62,9 @@ struct PhotoLoadService {
 
                 // 读取图片像素尺寸用于网格按比例排版（仅读元数据，不解码全图）
                 var pxW = 0, pxH = 0
-                if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
-                    pxW = props[kCGImagePropertyPixelWidth] as? Int ?? 0
-                    pxH = props[kCGImagePropertyPixelHeight] as? Int ?? 0
+                if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
+                    pxW = props["PixelWidth"] as? Int ?? 0
+                    pxH = props["PixelHeight"] as? Int ?? 0
                 }
 
                 let item = PhotoItem(

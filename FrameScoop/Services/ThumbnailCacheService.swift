@@ -46,7 +46,7 @@ final class ThumbnailCacheService {
             if let cached = self.memoryCache.object(forKey: key as NSString) {
                 return (key, cached)
             }
-            if let disk = self.readFromDisk(key: key) {
+            if let disk = self.readFromDisk(key: key, dir: self.diskCacheDir) {
                 self.memoryCache.setObject(disk, forKey: key as NSString)
                 return (key, disk)
             }
@@ -93,8 +93,8 @@ final class ThumbnailCacheService {
         return dir.appendingPathComponent(key.fnv1a() + ".png")
     }
 
-    private func readFromDisk(key: String) -> NSImage? {
-        let file = diskFileURL(key: key, dir: diskCacheDir)
+    private func readFromDisk(key: String, dir: URL) -> NSImage? {
+        let file = diskFileURL(key: key, dir: dir)
         guard FileManager.default.fileExists(atPath: file.path),
               let data = try? Data(contentsOf: file),
               let image = NSImage(data: data) else {

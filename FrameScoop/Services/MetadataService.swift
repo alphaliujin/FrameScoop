@@ -89,11 +89,13 @@ struct MetadataService {
         if seconds >= 1 {
             return String(format: "%.1f s", seconds)
         }
-        // 短于 1 秒，用分数表示
-        let denom = Int((1.0 / seconds).rounded())
-        if denom > 0 {
+        // 短于 1 秒，优先用分数表示（标准快门档位如 1/125、1/250）
+        let reciprocal = 1.0 / seconds
+        let denom = Int(reciprocal.rounded())
+        // 仅当倒数接近整数且 ≥ 2 时用分数，避免 0.75s 被错写成 "1/1 s"
+        if denom >= 2 && abs(reciprocal - Double(denom)) < 0.1 {
             return "1/\(denom) s"
         }
-        return String(format: "%.4f s", seconds)
+        return String(format: "%.3f s", seconds)
     }
 }

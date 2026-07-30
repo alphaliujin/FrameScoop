@@ -45,23 +45,28 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 详情视图当前展示的图片
     @Published var currentPhoto: PhotoItem?
 
-    /// 是否显示沉浸式详情视图
-    @Published var isShowingDetail: Bool = false
-
     /// 加载中状态
     @Published var isLoading: Bool = false
 
     /// 排序维度 / 方向
     @Published var sortOption: SortOption = .dateModified {
-        didSet { persistSettings(); rebuildDisplayedPhotos() }
+        didSet {
+            if !isLoadingSettings { persistSettings() }
+            rebuildDisplayedPhotos()
+        }
     }
     @Published var sortOrder: SortOrder = .descending {
-        didSet { persistSettings(); rebuildDisplayedPhotos() }
+        didSet {
+            if !isLoadingSettings { persistSettings() }
+            rebuildDisplayedPhotos()
+        }
     }
 
     /// 缩略图尺寸档位
     @Published var thumbnailSize: ThumbnailSize = .medium {
-        didSet { persistSettings() }
+        didSet {
+            if !isLoadingSettings { persistSettings() }
+        }
     }
 
     /// 详情视图中是否显示信息面板
@@ -90,6 +95,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     private var lastLoadedURL: URL?
 
     private let settingsKey = "FrameScoop.settings"
+    /// 加载设置期间置 true，跳过 didSet 中冗余的 persistSettings（避免把刚读出的值又写回）
+    private var isLoadingSettings = false
 
     #if DEBUG
     /// 调试输出到 stderr(无缓冲,重定向到文件立即可见;print 到 stdout 重定向时被缓冲不可见)
@@ -127,7 +134,8 @@ final class PhotoLibraryViewModel: ObservableObject {
         startAllRootScopes()
         rebuildTree()
         if selectedNodeID == nil {
-            selectedNodeID = folderTree.first?.children?.first?.id ?? folderTree.first?.id
+            // 默认选中首个根文件夹（展示其下含子目录的全部图片）
+            selectedNodeID = folderTree.first?.id
         }
     }
 
@@ -177,7 +185,9 @@ final class PhotoLibraryViewModel: ObservableObject {
                 activeRootURLs.append(resolved)
                 resolvedPath = resolved.path
             } else {
+                // 书签刚创建却无法解析（极少见，如权限瞬时丢失）：占位 nil，并提示用户
                 activeRootURLs.append(nil)
+                errorMessage = "无法恢复文件夹「\(url.lastPathComponent)」的访问权限，请重新添加。"
             }
             rebuildTree()
             selectedNodeID = resolvedPath ?? url.path   // 触发 onChange -> loadContent
@@ -279,9 +289,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     func loadContent(for id: String?) {
         selectedPhotoIDs.removeAll()
         currentPhoto = nil
-        isShowingDetail = false
 
-        guard let id else {
+        guard id != nil else {
             monitor.stop()
             photos = []
             lastLoadedURL = nil
@@ -368,15 +377,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         selectedPhotoIDs = [photo.id]
     }
 
+    /// 选中并打开图片到详情窗口。
+    /// 由调用方（视图，持有 openWindow 环境）负责随后 openWindow(id: "photo-detail")。
     func openPhoto(_ photo: PhotoItem) {
+        selectSingle(photo)
         currentPhoto = photo
-        isShowingDetail = true
         showsInfoPanel = false
-    }
-
-    func closeDetail() {
-        isShowingDetail = false
-        currentPhoto = nil
     }
 
     func nextPhoto() {
@@ -442,13 +448,24 @@ final class PhotoLibraryViewModel: ObservableObject {
         let started = dest.startAccessingSecurityScopedResource()
         defer { if started { dest.stopAccessingSecurityScopedResource() } }
 
-        do {
-            for src in urls {
-                let target = uniqueDestinationURL(in: dest, for: src)
+        // 逐张复制：单张失败不影响其余，并统计成功/失败数向用户反馈
+        var successCount = 0
+        var failedCount = 0
+        var lastError: String?
+        for src in urls {
+            let target = uniqueDestinationURL(in: dest, for: src)
+            do {
                 try FileManager.default.copyItem(at: src, to: target)
+                successCount += 1
+            } catch {
+                failedCount += 1
+                lastError = error.localizedDescription
             }
-        } catch {
-            errorMessage = "导出失败：\(error.localizedDescription)"
+        }
+        if failedCount > 0 {
+            errorMessage = successCount > 0
+                ? "已导出 \(successCount) 张，\(failedCount) 张失败：\(lastError ?? "")"
+                : "导出失败：\(lastError ?? "")"
         }
     }
 
@@ -459,13 +476,14 @@ final class PhotoLibraryViewModel: ObservableObject {
         guard fm.fileExists(atPath: candidate.path) else { return candidate }
         let base = src.deletingPathExtension().lastPathComponent
         let ext = src.pathExtension
-        var i = 2
-        while true {
+        // 序号上限 9999，超出则回退用 UUID 保证唯一，避免理论上的无限循环
+        for i in 2...9999 {
             let name = ext.isEmpty ? "\(base) \(i)" : "\(base) \(i).\(ext)"
             let c = dir.appendingPathComponent(name)
             if !fm.fileExists(atPath: c.path) { return c }
-            i += 1
         }
+        let fallback = ext.isEmpty ? "\(base) \(UUID().uuidString)" : "\(base) \(UUID().uuidString).\(ext)"
+        return dir.appendingPathComponent(fallback)
     }
 
     /// 复制到剪贴板：复制文件 URL；单张时额外复制图片，便于粘贴到聊天/编辑器。
@@ -553,6 +571,9 @@ final class PhotoLibraryViewModel: ObservableObject {
     private func loadSettings() {
         guard let data = UserDefaults.standard.data(forKey: settingsKey),
               let s = try? JSONDecoder().decode(Settings.self, from: data) else { return }
+        // 置位跳过 didSet 中的 persistSettings，避免刚读出的值又被写回
+        isLoadingSettings = true
+        defer { isLoadingSettings = false }
         sortOption = s.sortOption
         sortOrder = s.sortOrder
         thumbnailSize = s.thumbnailSize

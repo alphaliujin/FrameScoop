@@ -14,10 +14,6 @@ struct FrameScoopApp: App {
     /// 应用级共享状态：图片库视图模型（全局唯一，注入到整个视图树）
     @StateObject private var library = PhotoLibraryViewModel()
 
-    init() {
-        AppearanceConfigurator.configure()
-    }
-
     var body: some Scene {
         // 主窗口：侧边栏 + 图片网格，双击在新窗口查看大图
         WindowGroup {
@@ -63,11 +59,11 @@ struct FrameScoopApp: App {
         }
 
         // 图片详情窗口（独立窗口）
+        // 通过 DetailWindowRoot 包裹：currentPhoto 变 nil（切换文件夹）时自动关闭窗口，
+        // 窗口被关闭（红色按钮）时清理 currentPhoto，避免状态残留。
         Window("图片详情", id: "photo-detail") {
-            if let photo = library.currentPhoto {
-                PhotoDetailView(photo: photo)
-                    .environmentObject(library)
-            }
+            DetailWindowRoot()
+                .environmentObject(library)
         }
         .defaultSize(width: 1000, height: 700)
 
@@ -79,11 +75,29 @@ struct FrameScoopApp: App {
     }
 }
 
-extension Notification.Name {
-    /// 请求刷新当前文件夹
-    static let refreshRequested = Notification.Name("FrameScoop.refreshRequested")
-    /// 请求查看下一张（详情视图中）
-    static let nextPhotoRequested = Notification.Name("FrameScoop.nextPhotoRequested")
-    /// 请求查看上一张（详情视图中）
-    static let previousPhotoRequested = Notification.Name("FrameScoop.previousPhotoRequested")
+// MARK: - 详情窗口根视图
+
+/// 详情窗口的根容器：负责在 currentPhoto 被清空时关闭窗口，
+/// 并在窗口被用户关闭时回写清理 currentPhoto。
+private struct DetailWindowRoot: View {
+    @EnvironmentObject var library: PhotoLibraryViewModel
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    var body: some View {
+        Group {
+            if let photo = library.currentPhoto {
+                PhotoDetailView(photo: photo)
+            } else {
+                Color.clear
+            }
+        }
+        // 切换文件夹 / 移除当前图片导致 currentPhoto 变 nil 时，关闭详情窗口（避免空白窗口）
+        .onChange(of: library.currentPhoto) { _, newValue in
+            if newValue == nil { dismissWindow(id: "photo-detail") }
+        }
+        // 用户点窗口关闭按钮（红色交通灯）时清理 currentPhoto，避免残留状态
+        .onDisappear {
+            if library.currentPhoto != nil { library.currentPhoto = nil }
+        }
+    }
 }
