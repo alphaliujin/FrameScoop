@@ -13,24 +13,15 @@ struct ContentView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
 
     var body: some View {
-        ZStack {
-            // 两栏布局：侧边栏 + 缩略图区域（detail 列）
-            NavigationSplitView {
-                SidebarView()
-                    .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
-            } detail: {
-                // 缩略图区域
-                PhotoGridView()
-            }
-            .navigationTitle(library.selectedNode?.name ?? "FrameScoop")
-
-            // 沉浸式详情视图（毛玻璃覆盖层）
-            if library.isShowingDetail, let photo = library.currentPhoto {
-                PhotoDetailView(photo: photo)
-                    .transition(.opacity)
-                    .zIndex(1)
-            }
+        // 两栏布局：侧边栏 + 缩略图区域（detail 列）
+        NavigationSplitView {
+            SidebarView()
+                .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
+        } detail: {
+            // 缩略图区域
+            PhotoGridView()
         }
+        .navigationTitle(library.selectedNode?.name ?? "FrameScoop")
         // 选中文件夹节点变化时加载其内容。onChange 在视图更新事务之后执行，
         // 因此 loadContent 内修改 @Published 是安全的（不会在 view updates 期间发布）。
         .onChange(of: library.selectedNodeID) { _, newID in

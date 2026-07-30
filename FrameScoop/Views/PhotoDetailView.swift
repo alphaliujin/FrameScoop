@@ -17,6 +17,7 @@ struct PhotoDetailView: View {
     let photo: PhotoItem
 
     @EnvironmentObject var library: PhotoLibraryViewModel
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var image: NSImage?
     @State private var metadata: ImageMetadata?
     @State private var scale: CGFloat = 1.0
@@ -68,7 +69,7 @@ struct PhotoDetailView: View {
         .focusable()
         .focused($isFocused)
         .onAppear { isFocused = true }
-        .onKeyPress(.escape) { library.closeDetail(); return .handled }
+        .onKeyPress(.escape) { closeWindow(); return .handled }
         .onKeyPress(.leftArrow) { library.previousPhoto(); return .handled }
         .onKeyPress(.rightArrow) { library.nextPhoto(); return .handled }
     }
@@ -106,6 +107,12 @@ struct PhotoDetailView: View {
                     }
                     .onEnded { _ in lastOffset = offset }
             )
+            .onTapGesture(count: 1) {
+                // 信息面板打开时，单击图片任意位置关闭面板
+                if library.showsInfoPanel {
+                    withAnimation { library.showsInfoPanel = false }
+                }
+            }
             .onTapGesture(count: 2) {
                 // 双击切换缩放
                 if scale > 1 { resetTransform() }
@@ -126,12 +133,7 @@ struct PhotoDetailView: View {
                 withAnimation { library.showsInfoPanel.toggle() }
             } label: {
                 Image(systemName: library.showsInfoPanel ? "info.circle.fill" : "info.circle")
-            }
-            Button(role: .destructive) {
-                library.closeDetail()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.system(size: 36))
             }
         }
         .padding()
@@ -174,7 +176,7 @@ struct PhotoDetailView: View {
                     ForEach(library.displayedPhotos) { item in
                         FilmstripThumbnail(item: item, isCurrent: item.id == photo.id)
                             .frame(width: 64, height: 64)
-                            .onTapGesture { library.openPhoto(item) }
+                            .onTapGesture { library.currentPhoto = item }
                             .id(item.id)
                     }
                 }
@@ -192,12 +194,18 @@ struct PhotoDetailView: View {
 
     // MARK: - 加载
 
+    private func closeWindow() {
+        library.currentPhoto = nil
+        dismissWindow(id: "photo-detail")
+    }
+
     private func loadImageAndMetadata() async {
         resetTransform()
         let url = photo.url
         // 并发加载大图与元数据，缩短等待
+        // 使用 CGImageSource 降采样（最长边 2560px），避免将整张大图解码到内存
         async let loadedImage = Task.detached(priority: .userInitiated) { () -> NSImage? in
-            NSImage(contentsOf: url)
+            ThumbnailGenerator.generate(url: url, maxPixel: 2560)
         }.value
         async let meta = library.loadMetadata(for: url)
         let (img, md) = await (loadedImage, meta)

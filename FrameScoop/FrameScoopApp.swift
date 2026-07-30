@@ -3,7 +3,7 @@
 //  FrameScoop
 //
 //  应用入口。声明主窗口场景与全局命令菜单。
-//  FrameScoop 是一款纯原生 macOS 图片浏览器：按文件夹浏览，界面模仿“照片”App。
+//  FrameScoop 是一款纯原生 macOS 图片浏览器：按文件夹浏览，界面模仿"照片"App。
 //
 
 import SwiftUI
@@ -19,7 +19,7 @@ struct FrameScoopApp: App {
     }
 
     var body: some Scene {
-        // 主窗口：侧边栏 + 图片网格，双击进入沉浸式查看
+        // 主窗口：侧边栏 + 图片网格，双击在新窗口查看大图
         WindowGroup {
             ContentView()
                 .environmentObject(library)
@@ -35,7 +35,7 @@ struct FrameScoopApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
-            // 用 “添加文件夹” 替换默认 “New” 菜单项
+            // 用 "添加文件夹" 替换默认 "New" 菜单项
             CommandGroup(replacing: .newItem) {
                 Button("添加文件夹…") {
                     NotificationCenter.default.post(name: .addFolderRequested, object: nil)
@@ -47,7 +47,7 @@ struct FrameScoopApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command])
             }
-            // 文件菜单加入 “在 Finder 中显示” 与 “在信息面板切换”
+            // 文件菜单加入 "在 Finder 中显示" 与 "在信息面板切换"
             CommandGroup(after: .toolbar) {
                 Divider()
                 Button("下一张") {
@@ -62,7 +62,16 @@ struct FrameScoopApp: App {
             }
         }
 
-        // 设置窗口（模仿“照片”偏好设置）
+        // 图片详情窗口（独立窗口）
+        Window("图片详情", id: "photo-detail") {
+            if let photo = library.currentPhoto {
+                PhotoDetailView(photo: photo)
+                    .environmentObject(library)
+            }
+        }
+        .defaultSize(width: 1000, height: 700)
+
+        // 设置窗口（模仿"照片"偏好设置）
         Settings {
             SettingsView()
                 .environmentObject(library)

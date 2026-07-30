@@ -44,6 +44,7 @@ struct PhotoLoadService {
             }
 
             var items: [PhotoItem] = []
+            items.reserveCapacity(256)
             // 使用 nextObject() 而非 for-in，避免在异步上下文中使用同步迭代器（Swift 6 兼容）
             while let fileURL = enumerator.nextObject() as? URL {
                 // 异常隔离：单个文件读取失败不应中断整个枚举
@@ -53,10 +54,15 @@ struct PhotoLoadService {
                 let ext = fileURL.pathExtension.lowercased()
                 guard Self.supportedExtensions.contains(ext) else { continue }
 
+                // 校验文件是否为有效图片：CGImageSource 无法识别类型或无图像帧的文件跳过
+                // （扩展名是图片但内容损坏/不匹配的文件不会进入列表）
+                guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+                      CGImageSourceGetType(source) != nil,
+                      CGImageSourceGetCount(source) > 0 else { continue }
+
                 // 读取图片像素尺寸用于网格按比例排版（仅读元数据，不解码全图）
                 var pxW = 0, pxH = 0
-                if let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
-                   let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+                if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
                     pxW = props[kCGImagePropertyPixelWidth] as? Int ?? 0
                     pxH = props[kCGImagePropertyPixelHeight] as? Int ?? 0
                 }
