@@ -18,8 +18,8 @@ final class ThumbnailCacheService {
     /// 内存缓存：key 为 "URL|size|meta" 的稳定字符串
     private let memoryCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 800          // 最多缓存 800 张缩略图
-        cache.totalCostLimit = 256 * 1024 * 1024  // 256MB
+        cache.countLimit = 500
+        cache.totalCostLimit = 128 * 1024 * 1024  // 128MB
         return cache
     }()
 

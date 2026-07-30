@@ -10,6 +10,7 @@ import SwiftUI
 
 struct PhotoGridView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -45,7 +46,8 @@ struct PhotoGridView: View {
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
                             library.selectSingle(photo)
-                            library.openPhoto(photo)
+                            library.currentPhoto = photo
+                            openWindow(id: "photo-detail")
                         }
                         .onTapGesture(count: 1) {
                             library.toggleSelection(photo)
@@ -145,7 +147,7 @@ private struct FlowLayout<Content: View>: View {
 
     var body: some View {
         let rows = computeRows()
-        VStack(alignment: .leading, spacing: spacing) {
+        LazyVStack(alignment: .leading, spacing: spacing) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: spacing) {
                     ForEach(row) { photo in
