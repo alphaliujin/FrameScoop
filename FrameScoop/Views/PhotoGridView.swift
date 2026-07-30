@@ -28,6 +28,14 @@ struct PhotoGridView: View {
         .toolbar { toolbarContent }
     }
 
+    // MARK: - 打开详情
+
+    /// 双击 / 上下文菜单「打开」共用：单选该图、置为当前图并打开详情窗口。
+    private func openInDetail(_ photo: PhotoItem) {
+        library.openPhoto(photo)
+        openWindow(id: "photo-detail")
+    }
+
     // MARK: - 网格
 
     private var grid: some View {
@@ -45,15 +53,13 @@ struct PhotoGridView: View {
                                height: library.thumbnailSize.cellSize)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
-                            library.selectSingle(photo)
-                            library.currentPhoto = photo
-                            openWindow(id: "photo-detail")
+                            openInDetail(photo)
                         }
                         .onTapGesture(count: 1) {
                             library.toggleSelection(photo)
                         }
                         .contextMenu {
-                            Button("打开") { library.openPhoto(photo) }
+                            Button("打开") { openInDetail(photo) }
                             Button("在 Finder 中显示") { library.revealInFinder(photo) }
                             Divider()
                             Button("移到废纸篓", role: .destructive) {

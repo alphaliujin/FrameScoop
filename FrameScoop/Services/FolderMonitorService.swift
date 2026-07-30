@@ -43,9 +43,13 @@ final class FolderMonitorService {
             queue: queue
         )
 
-        // 事件处理器：收到事件后防抖 0.5s 再回调，避免短时间多次刷新
+        // 事件处理器：收到事件后防抖 0.5s 再回调，避免短时间多次刷新。
+        // 派发到主线程执行 scheduleDebouncedCallback：与 stop()（也在主线程）串行访问
+        // debounceWork，消除后台队列与主线程并发修改的数据竞争。
         source?.setEventHandler { [weak self] in
-            self?.scheduleDebouncedCallback()
+            DispatchQueue.main.async {
+                self?.scheduleDebouncedCallback()
+            }
         }
         // 不在 cancelHandler 里 close(fd)：stop() 会同步 cancel 并 close，
         // 否则 cancelHandler 异步执行会造成同一 fd 被关闭两次（double close）。

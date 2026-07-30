@@ -20,8 +20,7 @@ enum ThumbnailGenerator {
     /// - Returns: 生成的 NSImage；失败返回 nil（调用方应降级展示占位图）
     static func generate(url: URL, maxPixel: Int) -> NSImage? {
         // 1. 创建图片源（不立即解码整张图）
-        let sourceOptions = [CFString: Any]()
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             return nil
         }
 
@@ -29,12 +28,13 @@ enum ThumbnailGenerator {
         //    而触发 CGImageSourceCreateThumbnailAtIndex 的 -50（paramErr）错误日志。
         //    - type 为 nil：ImageIO 无法识别该文件为图片（如扩展名是图片但内容不是、0 字节文件）
         //    - count == 0：源中无任何图像帧
-        //    - status 为 incomplete / invalidData / unexpected：数据不完整或损坏（如文件正在拷贝）
+        //    - status 为 incomplete / invalidData / unexpectedEOF：数据不完整或损坏（如文件正在拷贝）
         let status = CGImageSourceGetStatus(source)
         guard CGImageSourceGetType(source) != nil,
               CGImageSourceGetCount(source) > 0,
               status != .statusIncomplete,
-              status != .statusInvalidData else {
+              status != .statusInvalidData,
+              status != .statusUnexpectedEOF else {
             return nil
         }
 
