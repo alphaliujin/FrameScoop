@@ -1,1 +1,0 @@
-FrameScoop.debug.dylib

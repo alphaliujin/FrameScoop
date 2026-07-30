@@ -146,7 +146,7 @@ struct PhotoDetailView: View {
             } label: {
                 Image(systemName: "chevron.left.circle.fill")
                     .font(.system(size: 30))
-                    .opacity(library.currentPhotoIndex ?? 0 > 0 ? 1 : 0.3)
+                    .opacity((library.currentPhotoIndex ?? 0) > 0 ? 1 : 0.3)
             }
             .buttonStyle(.plain)
             .tint(.white)
@@ -158,7 +158,7 @@ struct PhotoDetailView: View {
             } label: {
                 Image(systemName: "chevron.right.circle.fill")
                     .font(.system(size: 30))
-                    .opacity((library.currentPhotoIndex ?? 0) + 1 < library.displayedPhotos.count ? 1 : 0.3)
+                    .opacity(((library.currentPhotoIndex ?? 0) + 1) < library.displayedPhotos.count ? 1 : 0.3)
             }
             .buttonStyle(.plain)
             .tint(.white)

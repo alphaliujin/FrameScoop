@@ -109,6 +109,32 @@ final class ThumbnailCacheService {
               let png = rep.representation(using: .png, properties: [:]) else { return }
         let file = diskFileURL(key: key, dir: dir)
         try? png.write(to: file, options: .atomic)
+        // 写入后异步裁剪磁盘缓存上限：切换缩略图尺寸会产生新 key 的文件，
+        // 旧尺寸文件不再命中，需按数量上限回收，避免缓存目录无限膨胀。
+        Task.detached(priority: .background) { [dir] in
+            Self.pruneDiskCache(dir: dir, maxFiles: 2000)
+        }
+    }
+
+    /// 磁盘缓存文件数超限时，按最后修改时间删除最旧的文件
+    private static func pruneDiskCache(dir: URL, maxFiles: Int) {
+        let fm = FileManager.default
+        guard
+            let files = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            ),
+            files.count > maxFiles
+        else { return }
+        let sorted = files.sorted { a, b in
+            let ta = (try? a.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let tb = (try? b.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return ta < tb
+        }
+        for url in sorted.prefix(files.count - maxFiles) {
+            try? fm.removeItem(at: url)
+        }
     }
 }
 

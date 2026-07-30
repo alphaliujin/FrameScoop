@@ -47,9 +47,8 @@ final class FolderMonitorService {
         source?.setEventHandler { [weak self] in
             self?.scheduleDebouncedCallback()
         }
-        source?.setCancelHandler { [fileDescriptor] in
-            close(fileDescriptor)
-        }
+        // 不在 cancelHandler 里 close(fd)：stop() 会同步 cancel 并 close，
+        // 否则 cancelHandler 异步执行会造成同一 fd 被关闭两次（double close）。
         source?.resume()
     }
 

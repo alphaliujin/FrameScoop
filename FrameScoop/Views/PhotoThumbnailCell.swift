@@ -14,6 +14,7 @@ struct PhotoThumbnailCell: View {
 
     @EnvironmentObject var library: PhotoLibraryViewModel
     @State private var thumbnail: NSImage?
+    @State private var loadFailed = false
     @State private var isHovering = false
 
     var body: some View {
@@ -28,8 +29,8 @@ struct PhotoThumbnailCell: View {
                     Rectangle()
                         .fill(Color(nsColor: .quaternaryLabelColor))
                         .overlay {
-                            Image(systemName: "photo")
-                                .foregroundStyle(.tertiary)
+                            Image(systemName: loadFailed ? "exclamationmark.triangle" : "photo")
+                                .foregroundStyle(loadFailed ? Color.orange : Color.secondary.opacity(0.5))
                         }
                 }
             }
@@ -66,12 +67,14 @@ struct PhotoThumbnailCell: View {
         let maxPixel = library.thumbnailSize.maxPixel
         // 尺寸变更时清空旧图，避免拉伸
         thumbnail = nil
+        loadFailed = false
         let image = await ThumbnailCacheService.shared.thumbnail(for: photo.url, maxPixel: maxPixel)
-        // 校验任务未取消且仍为同一尺寸
-        if !Task.isCancelled {
-            await MainActor.run {
-                self.thumbnail = image
-            }
+        // 校验任务未取消（尺寸切换/单元格复用时旧任务结果丢弃）；.task 闭包已在主线程，可直接赋值
+        guard !Task.isCancelled else { return }
+        if let image {
+            self.thumbnail = image
+        } else {
+            self.loadFailed = true
         }
     }
 }

@@ -2,19 +2,14 @@
 //  PhotoGridView.swift
 //  FrameScoop
 //
-//  图片网格视图：自适应列数的瀑布/网格，模仿“照片”App 内容区。
-//  顶部工具栏：排序、缩略图尺寸、视图切换、添加文件夹。
+//  缩略图区域视图：固定行高、宽度按图片比例自适应的流式网格。
+//  顶部工具栏：排序、缩略图尺寸、刷新。
 //
 
 import SwiftUI
 
 struct PhotoGridView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
-
-    /// 自适应列：根据缩略图尺寸档位与窗口宽度自动排列列数
-    private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: library.thumbnailSize.cellSize), spacing: 4)]
-    }
 
     var body: some View {
         Group {
@@ -35,12 +30,18 @@ struct PhotoGridView: View {
     // MARK: - 网格
 
     private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(library.displayedPhotos) { photo in
+        GeometryReader { geo in
+            ScrollView {
+                FlowLayout(
+                    spacing: 4,
+                    rowHeight: library.thumbnailSize.cellSize,
+                    availableWidth: geo.size.width,
+                    items: library.displayedPhotos
+                ) { photo in
                     PhotoThumbnailCell(photo: photo,
                                        isSelected: library.selectedPhotoIDs.contains(photo.id))
-                        .aspectRatio(1, contentMode: .fit)
+                        .frame(width: max(library.thumbnailSize.cellSize * photo.aspectRatio, 40),
+                               height: library.thumbnailSize.cellSize)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
                             library.selectSingle(photo)
@@ -58,8 +59,8 @@ struct PhotoGridView: View {
                             }
                         }
                 }
+                .padding(4)
             }
-            .padding(4)
         }
     }
 
@@ -114,6 +115,64 @@ struct PhotoGridView: View {
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
             }
+
+            // 选中图片时显示「发送」菜单（右上角）
+            if !library.selectedURLs.isEmpty {
+                Menu {
+                    Button("导出到指定文件夹…") { library.exportSelectionToFolder() }
+                    Button("复制到剪贴板") { library.copySelectionToClipboard() }
+                    Divider()
+                    Button("作为邮件附件发送") { library.sendSelectionViaEmail() }
+                } label: {
+                    Label("发送", systemImage: "square.and.arrow.up")
+                }
+                .help("发送选中的 \(library.selectedURLs.count) 张图片")
+            }
         }
+    }
+}
+
+// MARK: - FlowLayout（固定行高、宽度按比例自适应）
+
+/// 将子视图按行排列的流式布局。每行高度固定，子视图宽度由自身决定（图片比例），
+/// 超出可用宽度时自动换行。效果类似照片 App 的"时刻"视图。
+private struct FlowLayout<Content: View>: View {
+    let spacing: CGFloat
+    let rowHeight: CGFloat
+    let availableWidth: CGFloat
+    let items: [PhotoItem]
+    let content: (PhotoItem) -> Content
+
+    var body: some View {
+        let rows = computeRows()
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: spacing) {
+                    ForEach(row) { photo in
+                        content(photo)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 将图片按比例宽度分行：累加每张图的显示宽度，超出可用宽度即换行
+    private func computeRows() -> [[PhotoItem]] {
+        guard availableWidth > 0 else { return [items] }
+        var rows: [[PhotoItem]] = []
+        var current: [PhotoItem] = []
+        var currentWidth: CGFloat = 0
+        for photo in items {
+            let w = max(rowHeight * photo.aspectRatio, 40)
+            if !current.isEmpty && currentWidth + spacing + w > availableWidth {
+                rows.append(current)
+                current = []
+                currentWidth = 0
+            }
+            current.append(photo)
+            currentWidth += w + (current.count > 1 ? spacing : 0)
+        }
+        if !current.isEmpty { rows.append(current) }
+        return rows
     }
 }

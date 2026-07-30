@@ -77,14 +77,4 @@ enum ThumbnailGenerator {
         return NSImage(cgImage: out, size: NSSize(width: tw, height: th))
     }
 
-    /// 仅读取图片像素尺寸，不做完整解码（开销极小）
-    static func pixelDimensions(of url: URL) -> (Int, Int)? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        guard let w = props?[kCGImagePropertyPixelWidth] as? Int,
-              let h = props?[kCGImagePropertyPixelHeight] as? Int else {
-            return nil
-        }
-        return (w, h)
-    }
 }
