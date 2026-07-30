@@ -32,18 +32,34 @@ struct PhotoItem: Identifiable, Hashable, Codable {
     /// 文件最后修改时间
     var modificationDate: Date?
 
+    /// 图片像素宽度（用于网格按比例排版）
+    var pixelWidth: Int
+
+    /// 图片像素高度（用于网格按比例排版）
+    var pixelHeight: Int
+
     /// 便捷构造：从 URL 与资源属性构造
     init(url: URL,
          name: String,
          size: Int64,
          creationDate: Date?,
-         modificationDate: Date?) {
+         modificationDate: Date?,
+         pixelWidth: Int = 0,
+         pixelHeight: Int = 0) {
         self.id = UUID()
         self.url = url
         self.name = name
         self.size = size
         self.creationDate = creationDate
         self.modificationDate = modificationDate
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+    }
+
+    /// 图片宽高比；无尺寸信息时回退为 1（正方形）
+    var aspectRatio: CGFloat {
+        guard pixelHeight > 0 else { return 1 }
+        return CGFloat(pixelWidth) / CGFloat(pixelHeight)
     }
 
     /// 人类可读的文件尺寸（如 “2.3 MB”）

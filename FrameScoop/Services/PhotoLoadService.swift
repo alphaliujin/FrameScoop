@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import ImageIO
 
 struct PhotoLoadService {
 
@@ -52,12 +53,22 @@ struct PhotoLoadService {
                 let ext = fileURL.pathExtension.lowercased()
                 guard Self.supportedExtensions.contains(ext) else { continue }
 
+                // 读取图片像素尺寸用于网格按比例排版（仅读元数据，不解码全图）
+                var pxW = 0, pxH = 0
+                if let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+                   let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+                    pxW = props[kCGImagePropertyPixelWidth] as? Int ?? 0
+                    pxH = props[kCGImagePropertyPixelHeight] as? Int ?? 0
+                }
+
                 let item = PhotoItem(
                     url: fileURL,
                     name: fileURL.deletingPathExtension().lastPathComponent,
                     size: Int64(values.fileSize ?? 0),
                     creationDate: values.creationDate,
-                    modificationDate: values.contentModificationDate
+                    modificationDate: values.contentModificationDate,
+                    pixelWidth: pxW,
+                    pixelHeight: pxH
                 )
                 items.append(item)
             }

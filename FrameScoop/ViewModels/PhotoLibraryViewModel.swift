@@ -84,16 +84,28 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 已激活安全作用域的根 URL，与 roots 按索引一一对应；书签解析失败时为 nil（仍占位以保持对齐）
     private var activeRootURLs: [URL?] = []
 
-    /// 文件夹内容加载的版本号：每次发起新加载递增，回调时校验，丢弃过期的异步结果
+    /// 文件夹内容加载的版本号：切换到不同文件夹时递增，回调时校验丢弃过期结果
     private var loadToken = 0
+    /// 最近一次加载的 URL：同 URL 的 reload 不递增 token，避免文件监控频繁触发时互相取消
+    private var lastLoadedURL: URL?
 
     private let settingsKey = "FrameScoop.settings"
+
+    #if DEBUG
+    /// 调试输出到 stderr(无缓冲,重定向到文件立即可见;print 到 stdout 重定向时被缓冲不可见)
+    private func dbg(_ s: String) {
+        FileHandle.standardError.write(Data((s + "\n").utf8))
+    }
+    #endif
 
     // MARK: - Init
 
     init() {
         // 以下两项不修改 @Published，可在 init 中安全设置
         monitor.onChange = { [weak self] in
+            #if DEBUG
+            self?.dbg("[DBG] monitor onChange -> reload")
+            #endif
             Task { @MainActor in self?.reloadCurrentFolder() }
         }
         observeMenuCommands()
@@ -114,7 +126,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         roots = bookmarkStore.loadAll()
         startAllRootScopes()
         rebuildTree()
-        if selectedNodeID == nil { selectedNodeID = folderTree.first?.id }
+        if selectedNodeID == nil {
+            selectedNodeID = folderTree.first?.children?.first?.id ?? folderTree.first?.id
+        }
     }
 
     // MARK: - 计算属性
@@ -270,9 +284,17 @@ final class PhotoLibraryViewModel: ObservableObject {
         guard let id else {
             monitor.stop()
             photos = []
+            lastLoadedURL = nil
             return
         }
-        let url = URL(fileURLWithPath: id)
+        // 使用 selectedNode?.url 而非 URL(fileURLWithPath: id)，
+        // 确保与 reloadCurrentFolder 使用同一 URL 对象，
+        // 避免 URL 表示差异导致 lastLoadedURL 比对失败、token 被误增。
+        guard let url = selectedNode?.url else {
+            isLoading = false
+            photos = []
+            return
+        }
         loadPhotos(from: url)
         monitor.startMonitoring(url: url)   // 内部会先停止上一次监控
     }
@@ -285,11 +307,21 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     private func loadPhotos(from url: URL) {
         isLoading = true
-        loadToken += 1
+        // 仅切换到不同文件夹时递增 token(取消在途的旧文件夹加载);
+        // 同一文件夹的 reload 不递增,避免文件监控频繁触发时加载任务互相取消而永不更新
+        if lastLoadedURL != url {
+            loadToken += 1
+            lastLoadedURL = url
+        }
         let token = loadToken
+        #if DEBUG
+        dbg("[DBG] loadPhotos \(url.lastPathComponent) token=\(token)")
+        #endif
         Task {
             let items = await loadService.loadPhotos(from: url)
-            // 丢弃过期结果：快速切换文件夹时旧加载可能后完成，避免覆盖新内容
+            #if DEBUG
+            self.dbg("[DBG] loadPhotos done \(url.lastPathComponent) items=\(items.count) match=\(token == loadToken)")
+            #endif
             guard token == loadToken else { return }
             self.photos = items
             self.isLoading = false
