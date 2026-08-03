@@ -18,6 +18,7 @@ import Foundation
 import AppKit
 import Combine
 import SwiftUI
+import Photos
 
 @MainActor
 final class PhotoLibraryViewModel: ObservableObject {
@@ -49,7 +50,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var isLoading: Bool = false
 
     /// 排序维度 / 方向
-    @Published var sortOption: SortOption = .dateModified {
+    /// 默认按「创建时间」（照片库源即拍摄时间），降序（最新在前）。
+    @Published var sortOption: SortOption = .dateCreated {
         didSet {
             if !isLoadingSettings { persistSettings() }
             rebuildDisplayedPhotos()
@@ -75,10 +77,12 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 用户可关闭的错误提示（非空时弹窗）
     @Published var errorMessage: String?
 
+    /// 照片库访问被拒绝/受限（选中「照片图库」节点且未授权时为 true，驱动空状态提示）
+    @Published var photosAccessDenied: Bool = false
+
     // MARK: - 私有依赖与状态
 
     private let loadService = PhotoLoadService()
-    private let metadataService = MetadataService()
     private let bookmarkStore = BookmarkStore()
     private let monitor = FolderMonitorService()
     private var cancellables = Set<AnyCancellable>()
@@ -91,12 +95,15 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     /// 文件夹内容加载的版本号：切换到不同文件夹时递增，回调时校验丢弃过期结果
     private var loadToken = 0
-    /// 最近一次加载的 URL：同 URL 的 reload 不递增 token，避免文件监控频繁触发时互相取消
-    private var lastLoadedURL: URL?
+    /// 最近一次加载的源 key：folder 为 url.path，照片库为固定常量。
+    /// 同源的 reload 不递增 token，避免文件监控频繁触发时加载任务互相取消。
+    private var lastLoadedKey: String?
     /// 文件夹树重建的版本号：仅最新一次重建结果写回 folderTree，过期结果丢弃
     private var rebuildToken = 0
 
     private let settingsKey = "FrameScoop.settings"
+    /// 旧版默认按「修改时间」排序；v2 起默认改为「创建时间」。标记是否已完成一次性迁移。
+    private let sortDefaultMigratedKey = "FrameScoop.sortDefault.v2"
     /// 加载设置期间置 true，跳过 didSet 中冗余的 persistSettings（避免把刚读出的值又写回）
     private var isLoadingSettings = false
 
@@ -132,13 +139,16 @@ final class PhotoLibraryViewModel: ObservableObject {
     @MainActor
     private func setUp() {
         loadSettings()
+        migrateSortDefaultIfNeeded()
         roots = bookmarkStore.loadAll()
         startAllRootScopes()
-        // 重建完成后选中首个根文件夹（此时 folderTree 已就绪）
+        // 重建完成后选中首个节点（此时 folderTree 已就绪）：
+        // 优先选首个用户文件夹，无则落到常驻的「照片图库」节点
         rebuildTree { [weak self] in
             guard let self else { return }
             if self.selectedNodeID == nil {
-                self.selectedNodeID = self.folderTree.first?.id
+                self.selectedNodeID = self.folderTree.first(where: { !$0.isPhotosLibrary })?.id
+                    ?? self.folderTree.first?.id
             }
         }
     }
@@ -290,7 +300,17 @@ final class PhotoLibraryViewModel: ObservableObject {
             }.value
             // 过期的重建结果丢弃（用户在此期间又增删了根）
             guard let self, token == self.rebuildToken else { return }
-            self.folderTree = tree
+            // 常驻的「照片图库」节点置于首位（不可移除/重命名，内容经 PhotosLibraryService 加载）
+            let photosNode = FolderNode(
+                id: PhotosLibraryService.sidebarNodeID,
+                name: "照片图库",
+                url: nil,
+                children: nil,
+                isRoot: true,
+                rootID: nil,
+                isPhotosLibrary: true
+            )
+            self.folderTree = [photosNode] + tree
             completion()
         }
     }
@@ -317,28 +337,44 @@ final class PhotoLibraryViewModel: ObservableObject {
         guard id != nil else {
             monitor.stop()
             photos = []
-            lastLoadedURL = nil
+            lastLoadedKey = nil
+            photosAccessDenied = false
             return
         }
-        // 使用 selectedNode?.url 而非 URL(fileURLWithPath: id)，
-        // 确保与 reloadCurrentFolder 使用同一 URL 对象，
-        // 避免 URL 表示差异导致 lastLoadedURL 比对失败、token 被误增。
-        guard let url = selectedNode?.url else {
+        guard let node = selectedNode else {
             // 节点已不在树中（如刚被移除）但 selectedNodeID 尚未清空：
             // 停止上一次的文件夹监控并复位加载状态，避免泄漏监控 fd 与残留空加载
             monitor.stop()
             isLoading = false
             photos = []
-            lastLoadedURL = nil
+            lastLoadedKey = nil
+            photosAccessDenied = false
+            return
+        }
+        if node.isPhotosLibrary {
+            // 照片库源不走文件夹监控
+            monitor.stop()
+            loadPhotosLibrary()
+            return
+        }
+        guard let url = node.url else {
+            monitor.stop()
+            isLoading = false
+            photos = []
             return
         }
         loadPhotos(from: url)
         monitor.startMonitoring(url: url)   // 内部会先停止上一次监控
     }
 
-    /// 重新加载当前选中文件夹（监控触发 / 手动刷新）
+    /// 重新加载当前选中节点的内容（监控触发 / 手动刷新）
     func reloadCurrentFolder() {
-        guard let url = selectedNode?.url else { return }
+        guard let node = selectedNode else { return }
+        if node.isPhotosLibrary {
+            loadPhotosLibrary()
+            return
+        }
+        guard let url = node.url else { return }
         loadPhotos(from: url)
     }
 
@@ -346,9 +382,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         isLoading = true
         // 仅切换到不同文件夹时递增 token(取消在途的旧文件夹加载);
         // 同一文件夹的 reload 不递增,避免文件监控频繁触发时加载任务互相取消而永不更新
-        if lastLoadedURL != url {
+        if lastLoadedKey != url.path {
             loadToken += 1
-            lastLoadedURL = url
+            lastLoadedKey = url.path
         }
         let token = loadToken
         #if DEBUG
@@ -365,30 +401,71 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
     }
 
+    /// 加载系统照片库（Photos.framework，含 iCloud 同步到本机的照片）。
+    /// 先确保鉴权（已授权/拒绝时幂等），再枚举全部图片资产。
+    private func loadPhotosLibrary() {
+        isLoading = true
+        if lastLoadedKey != PhotosLibraryService.sidebarNodeID {
+            loadToken += 1
+            lastLoadedKey = PhotosLibraryService.sidebarNodeID
+        }
+        let token = loadToken
+        Task {
+            let status = await PhotosLibraryService.shared.requestAuthorization()
+            guard token == loadToken else { return }
+            guard status == .authorized else {
+                self.photos = []
+                self.isLoading = false
+                self.photosAccessDenied = (status == .denied || status == .restricted)
+                return
+            }
+            let items = await PhotosLibraryService.shared.loadAllPhotos()
+            guard token == loadToken else { return }
+            self.photos = items
+            self.isLoading = false
+            self.photosAccessDenied = false
+        }
+    }
+
     // MARK: - 节点级数据（侧边栏行懒加载）
 
-    /// 递归统计节点文件夹的图片数量（含下级目录）。根作用域已激活，无需额外处理。
+    /// 递归统计节点文件夹的图片数量（含下级目录）。照片库节点返回照片库全部图片资产数。
     func countImages(for node: FolderNode) async -> Int {
-        let url = node.url
+        if node.isPhotosLibrary {
+            return await Task.detached(priority: .utility) {
+                PHAsset.fetchAssets(with: .image, options: nil).count
+            }.value
+        }
+        guard let url = node.url else { return 0 }
         return await Task.detached(priority: .utility) {
             PhotoLoadService.countImagesRecursively(in: url)
         }.value
     }
 
-    /// 获取节点的预览缩略图（取该文件夹首图）。
+    /// 获取节点的预览缩略图（取该文件夹/照片库首图）。
     func previewThumbnail(for node: FolderNode) async -> NSImage? {
-        let url = node.url
+        if node.isPhotosLibrary {
+            let id = await Task.detached(priority: .utility) { () -> String? in
+                PHAsset.fetchAssets(with: .image, options: nil).firstObject?.localIdentifier
+            }.value
+            guard let id else { return nil }
+            return await PhotosLibraryService.shared.image(for: id, maxPixel: 96)
+        }
+        guard let url = node.url else { return nil }
         // firstImageURL 是递归目录枚举，放到后台线程避免阻塞 UI（与 countImages 一致）
         let firstImage = await Task.detached(priority: .utility) {
             PhotoLoadService.firstImageURL(in: url)
         }.value
         guard let firstImage else { return nil }
-        return await ThumbnailCacheService.shared.thumbnail(for: firstImage, maxPixel: 96)
+        let item = PhotoItem(url: firstImage, name: "", size: 0,
+                             creationDate: nil, modificationDate: nil)
+        return await ThumbnailCacheService.shared.thumbnail(for: item, maxPixel: 96)
     }
 
-    /// 在 Finder 中显示某节点文件夹
+    /// 在 Finder 中显示某节点文件夹（照片库节点无对应文件，无操作）
     func revealFolderInFinder(_ node: FolderNode) {
-        NSWorkspace.shared.activateFileViewerSelecting([node.url])
+        guard let url = node.url else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     // MARK: - 图片选择 / 详情
@@ -423,20 +500,22 @@ final class PhotoLibraryViewModel: ObservableObject {
         currentPhoto = displayedPhotos[idx - 1]
     }
 
-    /// 在 Finder 中显示选中图片
+    /// 在 Finder 中显示选中图片（仅文件夹源；照片库源无对应文件）
     func revealInFinder(_ photo: PhotoItem) {
-        NSWorkspace.shared.activateFileViewerSelecting([photo.url])
+        guard let url = photo.url else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    /// 加载图片元数据（详情面板调用，内部使用 mdls，全程异常安全）
-    func loadMetadata(for url: URL) async -> ImageMetadata {
-        await metadataService.loadMetadata(for: url)
+    /// 加载图片元数据（详情面板调用；按 sourceKind 分派：folder->mdls，photoLibrary->PHAsset）
+    func loadMetadata(for item: PhotoItem) async -> ImageMetadata {
+        await PhotoLoader.metadata(for: item)
     }
 
-    /// 删除选中图片到废纸篓（原生，可恢复）
+    /// 删除选中图片到废纸篓（原生，可恢复）。
+    /// folder 源：FileManager.trashItem；photoLibrary 源：PHAssetChangeRequest 删除到「最近删除」。
     func trashPhotos(_ ids: Set<String>) {
-        let urls = photos.filter { ids.contains($0.id) }.map { $0.url }
-        guard !urls.isEmpty else { return }
+        let targets = photos.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
         // 若被删图片中有当前正在详情视图查看的，先清空 currentPhoto：
         // 触发 DetailWindowRoot 关闭详情窗口，避免显示已废纸篓的陈旧大图
         if let current = currentPhoto, ids.contains(current.id) {
@@ -444,104 +523,154 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
         // 同步移出选择集合，避免残留无效 id
         selectedPhotoIDs.subtract(ids)
-        var failedCount = 0
-        for url in urls {
-            var resultingURL: NSURL?
-            do {
-                try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
-            } catch {
-                failedCount += 1
+        let folderURLs = targets.filter { $0.sourceKind == .folder }.compactMap { $0.url }
+        let photoIDs = targets.filter { $0.sourceKind == .photoLibrary }.compactMap { $0.assetIdentifier }
+        guard !folderURLs.isEmpty || !photoIDs.isEmpty else { return }
+        Task { [weak self] in
+            var failed = 0
+            // 文件夹源：逐张废纸篓
+            for url in folderURLs {
+                var resultingURL: NSURL?
+                do { try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL) }
+                catch { failed += 1 }
             }
-        }
-        // 无论部分成功与否都刷新网格，使已删除的从界面移除
-        reloadCurrentFolder()
-        if failedCount > 0 {
-            errorMessage = "有 \(failedCount) 张图片无法移到废纸篓"
+            // Photos 源：批量删除到「最近删除」
+            if !photoIDs.isEmpty {
+                let ok = await PhotosLibraryService.shared.deleteAssets(localIdentifiers: photoIDs)
+                if !ok { failed += photoIDs.count }
+            }
+            guard let self else { return }
+            // 无论部分成功与否都刷新网格，使已删除的从界面移除
+            self.reloadCurrentFolder()
+            if failed > 0 {
+                self.errorMessage = "有 \(failed) 张图片无法移到废纸篓"
+            }
         }
     }
 
     // MARK: - 发送 / 分享
 
-    /// 当前选中图片的文件 URL
-    var selectedURLs: [URL] {
-        photos.filter { selectedPhotoIDs.contains($0.id) }.map { $0.url }
+    /// 当前选中的图片项（用于按源分派的操作）
+    var selectedItems: [PhotoItem] {
+        photos.filter { selectedPhotoIDs.contains($0.id) }
     }
 
-    /// 导出到指定文件夹：弹出 NSOpenPanel 选择目标目录，复制选中图片。
+    /// 当前选中图片的文件 URL（仅 folder 源；用于邮件附件等需文件 URL 的场景）
+    var selectedURLs: [URL] {
+        selectedItems.filter { $0.sourceKind == .folder }.compactMap { $0.url }
+    }
+
+    /// 导出到指定文件夹：弹出 NSOpenPanel 选择目标目录，复制/导出选中图片。
+    /// folder 源：复制文件；photoLibrary 源：经 PHAssetResourceManager 导出原图数据。
     func exportSelectionToFolder() {
-        let urls = selectedURLs
-        guard !urls.isEmpty else { return }
+        let items = selectedItems
+        guard !items.isEmpty else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "导出到此文件夹"
-        panel.message = "将选中的 \(urls.count) 张图片复制到该文件夹。"
+        panel.message = "将选中的 \(items.count) 张图片复制到该文件夹。"
         guard panel.runModal() == .OK, let dest = panel.url else { return }
 
-        // 用户选择的目标目录需激活安全作用域以写入
+        // 用户选择的目标目录需激活安全作用域以写入（安全作用域为进程级，跨线程有效）；
+        // 在导出任务完成后于主线程停止，避免提前停止导致后续写入失败。
         let started = dest.startAccessingSecurityScopedResource()
-        defer { if started { dest.stopAccessingSecurityScopedResource() } }
-
-        // 逐张复制：单张失败不影响其余，并统计成功/失败数向用户反馈
-        var successCount = 0
-        var failedCount = 0
-        var lastError: String?
-        for src in urls {
-            let target = uniqueDestinationURL(in: dest, for: src)
-            do {
-                try FileManager.default.copyItem(at: src, to: target)
-                successCount += 1
-            } catch {
-                failedCount += 1
-                lastError = error.localizedDescription
+        // 强捕获 self：导出期间保留 VM（@MainActor 类，Sendable），避免 weak-self 在 @Sendable 闭包中触发并发告警
+        Task.detached { [self] in
+            var successCount = 0
+            var failedCount = 0
+            var lastError: String?
+            for item in items {
+                let target = PhotoLibraryViewModel.uniqueDestinationURL(in: dest, for: item.name)
+                let ok: Bool
+                switch item.sourceKind {
+                case .folder:
+                    guard let src = item.url else { ok = false; break }
+                    do {
+                        try FileManager.default.copyItem(at: src, to: target)
+                        ok = true
+                    } catch {
+                        lastError = error.localizedDescription
+                        ok = false
+                    }
+                case .photoLibrary:
+                    guard let id = item.assetIdentifier else { ok = false; break }
+                    ok = await PhotosLibraryService.shared.exportAsset(localIdentifier: id, to: target)
+                }
+                if ok { successCount += 1 } else { failedCount += 1 }
             }
-        }
-        if failedCount > 0 {
-            errorMessage = successCount > 0
-                ? "已导出 \(successCount) 张，\(failedCount) 张失败：\(lastError ?? "")"
-                : "导出失败：\(lastError ?? "")"
+            // 计算结果消息（let，避免 MainActor 闭包捕获 var 触发并发告警）
+            let msg: String? = failedCount > 0
+                ? (successCount > 0
+                    ? "已导出 \(successCount) 张，\(failedCount) 张失败：\(lastError ?? "")"
+                    : "导出失败：\(lastError ?? "")")
+                : nil
+            await MainActor.run {
+                if started { dest.stopAccessingSecurityScopedResource() }
+                if let msg { self.errorMessage = msg }
+            }
         }
     }
 
-    /// 生成不冲突的目标路径（同名自动加序号）
-    private func uniqueDestinationURL(in dir: URL, for src: URL) -> URL {
-        let candidate = dir.appendingPathComponent(src.lastPathComponent)
+    /// 生成不冲突的目标路径（同名自动加序号）；保留原扩展名（Photos 项用 name 中的扩展名）。
+    /// nonisolated：仅依赖 FileManager（线程安全），可被后台导出任务直接调用。
+    private nonisolated static func uniqueDestinationURL(in dir: URL, for name: String) -> URL {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        let candidate = dir.appendingPathComponent(name)
         let fm = FileManager.default
         guard fm.fileExists(atPath: candidate.path) else { return candidate }
-        let base = src.deletingPathExtension().lastPathComponent
-        let ext = src.pathExtension
         // 序号上限 9999，超出则回退用 UUID 保证唯一，避免理论上的无限循环
         for i in 2...9999 {
-            let name = ext.isEmpty ? "\(base) \(i)" : "\(base) \(i).\(ext)"
-            let c = dir.appendingPathComponent(name)
+            let n = ext.isEmpty ? "\(base) \(i)" : "\(base) \(i).\(ext)"
+            let c = dir.appendingPathComponent(n)
             if !fm.fileExists(atPath: c.path) { return c }
         }
         let fallback = ext.isEmpty ? "\(base) \(UUID().uuidString)" : "\(base) \(UUID().uuidString).\(ext)"
         return dir.appendingPathComponent(fallback)
     }
 
-    /// 复制到剪贴板：复制文件 URL；单张时额外复制图片，便于粘贴到聊天/编辑器。
+    /// 复制到剪贴板：folder 源复制文件 URL（单张额外复制图片）；photoLibrary 源复制图片数据。
     func copySelectionToClipboard() {
-        let urls = selectedURLs
-        guard !urls.isEmpty else { return }
-        let single = urls.count == 1 ? urls.first : nil
+        let items = selectedItems
+        guard !items.isEmpty else { return }
         Task.detached {
-            let image = single.flatMap { NSImage(contentsOf: $0) }
+            let folderURLs = items.filter { $0.sourceKind == .folder }.compactMap { $0.url }
+            // 单张时额外把图片本身放上剪贴板，便于粘贴到聊天/编辑器
+            let single = items.count == 1 ? items.first : nil
+            var fetched: NSImage?
+            if let item = single {
+                switch item.sourceKind {
+                case .folder:
+                    fetched = item.url.flatMap { NSImage(contentsOf: $0) }
+                case .photoLibrary:
+                    if let id = item.assetIdentifier {
+                        fetched = await PhotosLibraryService.shared.image(for: id, maxPixel: 2048)
+                    }
+                }
+            }
+            // 拷贝为 let，避免 MainActor 闭包捕获 var 触发并发告警
+            let singleImage = fetched
             await MainActor.run {
                 let pb = NSPasteboard.general
                 pb.clearContents()
-                var writers: [NSPasteboardWriting] = urls.map { $0 as NSURL }
-                if let image { writers.append(image as NSPasteboardWriting) }
+                var writers: [NSPasteboardWriting] = folderURLs.map { $0 as NSURL }
+                if let singleImage { writers.append(singleImage as NSPasteboardWriting) }
                 pb.writeObjects(writers)
             }
         }
     }
 
-    /// 作为邮件附件发送
+    /// 作为邮件附件发送（folder 源附文件 URL；photoLibrary 源无文件 URL，提示先导出）
     func sendSelectionViaEmail() {
-        let urls = selectedURLs
-        guard !urls.isEmpty else { return }
+        let items = selectedItems
+        guard !items.isEmpty else { return }
+        let urls = items.filter { $0.sourceKind == .folder }.compactMap { $0.url }
+        guard !urls.isEmpty else {
+            errorMessage = "照片库图片需先「导出到指定文件夹」后再发送。"
+            return
+        }
         guard let service = NSSharingService(named: .composeEmail) else {
             errorMessage = "未找到邮件应用。"
             return
@@ -612,6 +741,17 @@ final class PhotoLibraryViewModel: ObservableObject {
         sortOption = s.sortOption
         sortOrder = s.sortOrder
         thumbnailSize = s.thumbnailSize
+    }
+
+    /// 一次性迁移：旧版默认按「修改时间」排序，现改为按「创建时间」（照片库源即拍摄时间）。
+    /// 仅当用户仍处于旧默认（.dateModified）时迁移；已自定义排序的不动。
+    /// 迁移完成后置位，避免后续覆盖用户的显式选择。
+    private func migrateSortDefaultIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: sortDefaultMigratedKey) else { return }
+        UserDefaults.standard.set(true, forKey: sortDefaultMigratedKey)
+        if sortOption == .dateModified {
+            sortOption = .dateCreated   // 触发 didSet 持久化新默认
+        }
     }
 
     // MARK: - 菜单命令订阅

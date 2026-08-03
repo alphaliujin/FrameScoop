@@ -7,24 +7,35 @@
 
 import Foundation
 
-/// 图片项：对应磁盘上的一个图片文件。
-/// 遵循 `Identifiable` 以便在 SwiftUI 列表/网格中渲染；
-/// 遵循 `Hashable` 以支持选择与导航；
-/// 遵循 `Codable` 以备未来持久化浏览记录（当前未持久化）。
-struct PhotoItem: Identifiable, Hashable, Codable {
+/// 图片来源类型：文件系统文件夹 或 系统照片库（Photos.framework，含 iCloud 同步照片）。
+enum PhotoSourceKind: String, Codable, Sendable {
+    case folder
+    case photoLibrary
+}
 
-    /// 唯一标识：基于文件 URL 路径，跨会话与跨 reload 稳定。
-    /// 同一文件在 photos / displayedPhotos / currentPhoto / selectedPhotoIDs 中 id 始终一致，
-    /// 故文件监控触发的 reload 不会让导航索引、选择高亮、胶片条当前格失配。
+/// 图片项：对应一张图片。
+/// - folder 源：磁盘文件，url 有值，经 ThumbnailGenerator / mdls 读取。
+/// - photoLibrary 源：Photos 资产，assetIdentifier 有值、url 为 nil，
+///   图片经 PHImageManager 获取、元数据来自 PHAsset。
+/// 遵循 Sendable（值类型，成员均为 Sendable），可跨 actor 传递（后台取图任务捕获）。
+struct PhotoItem: Identifiable, Hashable, Codable, Sendable {
+
+    /// 唯一标识：folder 为 url.path；photoLibrary 为 "ph:" + localIdentifier。跨 reload 稳定。
     let id: String
 
-    /// 图片文件在磁盘上的 URL（沙盒内已通过安全作用域书签授权）
-    let url: URL
+    /// 文件 URL（folder 源有值；photoLibrary 源为 nil，图片经 PHImageManager 获取）
+    let url: URL?
 
-    /// 文件名（不含路径），用于界面展示
+    /// Photos 资源 localIdentifier（photoLibrary 源有值；folder 源为 nil）
+    let assetIdentifier: String?
+
+    /// 来源类型
+    var sourceKind: PhotoSourceKind
+
+    /// 展示名称（不含路径）
     var name: String
 
-    /// 文件大小（字节）
+    /// 文件大小（字节）；photoLibrary 源暂不取（留 0，界面显示 "—"）
     var size: Int64
 
     /// 文件创建时间
@@ -33,13 +44,13 @@ struct PhotoItem: Identifiable, Hashable, Codable {
     /// 文件最后修改时间
     var modificationDate: Date?
 
-    /// 图片像素宽度（用于网格按比例排版）
+    /// 图片像素宽度
     var pixelWidth: Int
 
-    /// 图片像素高度（用于网格按比例排版）
+    /// 图片像素高度
     var pixelHeight: Int
 
-    /// 便捷构造：从 URL 与资源属性构造
+    /// 文件夹源便捷构造
     init(url: URL,
          name: String,
          size: Int64,
@@ -49,8 +60,29 @@ struct PhotoItem: Identifiable, Hashable, Codable {
          pixelHeight: Int = 0) {
         self.id = url.path
         self.url = url
+        self.assetIdentifier = nil
+        self.sourceKind = .folder
         self.name = name
         self.size = size
+        self.creationDate = creationDate
+        self.modificationDate = modificationDate
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+    }
+
+    /// Photos 照片库源便捷构造
+    init(assetIdentifier: String,
+         name: String,
+         creationDate: Date?,
+         modificationDate: Date?,
+         pixelWidth: Int,
+         pixelHeight: Int) {
+        self.id = "ph:" + assetIdentifier
+        self.url = nil
+        self.assetIdentifier = assetIdentifier
+        self.sourceKind = .photoLibrary
+        self.name = name
+        self.size = 0
         self.creationDate = creationDate
         self.modificationDate = modificationDate
         self.pixelWidth = pixelWidth
@@ -63,9 +95,9 @@ struct PhotoItem: Identifiable, Hashable, Codable {
         return CGFloat(pixelWidth) / CGFloat(pixelHeight)
     }
 
-    /// 人类可读的文件尺寸（如 “2.3 MB”）
+    /// 人类可读的文件尺寸（如 "2.3 MB"）；无尺寸显示 "—"
     var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        size > 0 ? ByteCountFormatter.string(fromByteCount: size, countStyle: .file) : "—"
     }
 
     /// 排序/分组用的日期：优先修改时间，其次创建时间

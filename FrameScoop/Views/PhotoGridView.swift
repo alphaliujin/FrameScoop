@@ -16,6 +16,10 @@ struct PhotoGridView: View {
         Group {
             if library.isLoading && library.photos.isEmpty {
                 loadingState
+            } else if library.photosAccessDenied {
+                EmptyStateView(systemImage: "photo.badge.exclamationmark",
+                               title: "无法访问照片库",
+                               message: "请在「系统设置 › 隐私与安全性 › 照片」中允许 FrameScoop 访问照片，然后刷新。")
             } else if library.photos.isEmpty {
                 EmptyStateView(systemImage: "photo.on.rectangle.angled",
                                title: "此文件夹暂无图片",
@@ -60,7 +64,9 @@ struct PhotoGridView: View {
                         }
                         .contextMenu {
                             Button("打开") { openInDetail(photo) }
-                            Button("在 Finder 中显示") { library.revealInFinder(photo) }
+                            if photo.sourceKind == .folder {
+                                Button("在 Finder 中显示") { library.revealInFinder(photo) }
+                            }
                             Divider()
                             Button("移到废纸篓", role: .destructive) {
                                 library.trashPhotos([photo.id])
@@ -125,7 +131,7 @@ struct PhotoGridView: View {
             }
 
             // 选中图片时显示「发送」菜单（右上角）
-            if !library.selectedURLs.isEmpty {
+            if !library.selectedPhotoIDs.isEmpty {
                 Menu {
                     Button("导出到指定文件夹…") { library.exportSelectionToFolder() }
                     Button("复制到剪贴板") { library.copySelectionToClipboard() }
@@ -134,7 +140,7 @@ struct PhotoGridView: View {
                 } label: {
                     Label("发送", systemImage: "square.and.arrow.up")
                 }
-                .help("发送选中的 \(library.selectedURLs.count) 张图片")
+                .help("发送选中的 \(library.selectedPhotoIDs.count) 张图片")
             }
         }
     }

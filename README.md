@@ -13,6 +13,7 @@
 | 模块 | 说明 |
 | --- | --- |
 | 文件夹浏览 | 侧边栏管理多个图片文件夹，重启后通过安全作用域书签保留访问权限 |
+| 照片图库 | 侧边栏常驻「照片图库」节点，经 Photos.framework 读取系统照片库（含 iCloud 同步照片）；支持浏览、详情、元数据、移到「最近删除」、导出、复制 |
 | 照片网格 | 自适应列数网格，模仿“照片”App 内容区；支持排序、缩略图尺寸切换 |
 | 沉浸查看 | 双击进入毛玻璃全屏查看，支持双指缩放、拖拽平移、上下张导航、底部胶片条 |
 | 元数据面板 | 显示像素尺寸、色彩空间、拍摄设备、EXIF（光圈/ISO/焦距/快门等） |
@@ -31,8 +32,8 @@ com.apple.security.files.user-selected.read-write = true <!-- 用户授权的文
 com.apple.security.files.bookmarks.app-scope = true <!-- 安全作用域书签持久化 -->
 ```
 
-- 不声明网络权限（应用完全离线）
-- 不使用 Photos.framework（直接读文件，无需相册权限）
+- 不声明网络权限（应用完全离线；iCloud 照片由系统照片库守护进程按需下载，非应用直接联网）
+- 通过 Photos.framework 读取系统照片库（含 iCloud 同步照片）：macOS 沙盒下经 TCC 授权访问，声明 `NSPhotoLibraryUsageDescription`，无需额外沙盒权限项
 - 所有命令行调用（`mdls`）均通过 `ShellExecutor` 做异常捕获与超时保护，**绝不因 shell 失败而崩溃**
 
 ---

@@ -203,14 +203,15 @@ struct PhotoDetailView: View {
 
     private func loadImageAndMetadata() async {
         resetTransform()
-        let url = photo.url
+        let photo = self.photo
         // 并发加载大图与元数据，缩短等待
-        // 使用 CGImageSource 降采样（最长边 2560px），避免将整张大图解码到内存
-        async let loadedImage = Task.detached(priority: .userInitiated) { () -> NSImage? in
-            ThumbnailGenerator.generate(url: url, maxPixel: 2560)
-        }.value
-        async let meta = library.loadMetadata(for: url)
-        let (img, md) = await (loadedImage, meta)
+        // 大图经 PhotoLoader 分派（folder->CGImageSource 降采样，photoLibrary->PHImageManager），
+        // 后台线程解码避免阻塞 UI；元数据按源分派（folder->mdls，photoLibrary->PHAsset）
+        let imageTask = Task.detached(priority: .userInitiated) { () -> NSImage? in
+            await PhotoLoader.fullImage(for: photo)
+        }
+        async let meta = library.loadMetadata(for: photo)
+        let (img, md) = await (imageTask.value, meta)
         image = img
         metadata = md
     }
@@ -246,7 +247,7 @@ private struct FilmstripThumbnail: View {
                 .strokeBorder(isCurrent ? Color.accentColor : .clear, lineWidth: 3)
         )
         .task(id: item.id) {
-            image = await ThumbnailCacheService.shared.thumbnail(for: item.url, maxPixel: 128)
+            image = await ThumbnailCacheService.shared.thumbnail(for: item, maxPixel: 128)
         }
     }
 }

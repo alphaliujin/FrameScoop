@@ -38,11 +38,11 @@ final class ThumbnailCacheService {
     private init() {}
 
     /// 获取缩略图：命中缓存立即返回，否则后台生成后返回。
-    func thumbnail(for url: URL, maxPixel: Int) async -> NSImage? {
-        // 1. 后台：计算 key（含一次 stat）并检查内存/磁盘缓存。
-        //    将 stat、磁盘读、PNG 解码都移出主线程，避免快速滚动时阻塞 UI。
+    /// 按 item.sourceKind 分派生成（folder->ImageIO 降采样，photoLibrary->PHImageManager）。
+    func thumbnail(for item: PhotoItem, maxPixel: Int) async -> NSImage? {
+        // 1. 后台：计算 key 并检查内存/磁盘缓存（stat/磁盘读/JPEG 解码移出主线程，避免快速滚动阻塞 UI）
         let (key, hit): (String, NSImage?) = await Task.detached(priority: .userInitiated) { [self] in
-            let key = self.cacheKey(url: url, maxPixel: maxPixel)
+            let key = self.cacheKey(for: item, maxPixel: maxPixel)
             if let cached = self.memoryCache.object(forKey: key as NSString) {
                 return (key, cached)
             }
@@ -57,7 +57,7 @@ final class ThumbnailCacheService {
         // 2. 未命中：去重 + 后台生成（原子 get-or-create，避免并发重复生成）
         let task = await inFlight.getOrCreate(key) { [diskCacheDir] in
             Task.detached(priority: .userInitiated) { [weak self] in
-                let image = ThumbnailGenerator.generate(url: url, maxPixel: maxPixel)
+                let image = await PhotoLoader.thumbnail(for: item, maxPixel: maxPixel)
                 if let image {
                     self?.memoryCache.setObject(image, forKey: key as NSString)
                     self?.writeToDisk(image: image, key: key, dir: diskCacheDir)
@@ -80,12 +80,20 @@ final class ThumbnailCacheService {
 
     // MARK: - Private
 
-    private func cacheKey(url: URL, maxPixel: Int) -> String {
-        // 使用文件大小 + 修改时间 + 尺寸 生成稳定 key，文件改动即失效
-        let attrs = (try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]))
-        let size = attrs?.fileSize ?? 0
-        let mtime = (attrs?.contentModificationDate?.timeIntervalSince1970).map { String($0) } ?? "0"
-        return "\(url.path)|\(size)|\(mtime)|\(maxPixel)"
+    private func cacheKey(for item: PhotoItem, maxPixel: Int) -> String {
+        switch item.sourceKind {
+        case .folder:
+            // 文件夹源：用文件大小 + 修改时间 + 尺寸生成稳定 key，文件改动即失效
+            let url = item.url ?? URL(fileURLWithPath: "/unknown")
+            let attrs = (try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]))
+            let size = attrs?.fileSize ?? 0
+            let mtime = (attrs?.contentModificationDate?.timeIntervalSince1970).map { String($0) } ?? "0"
+            return "\(url.path)|\(size)|\(mtime)|\(maxPixel)"
+        case .photoLibrary:
+            // 照片库源：以 localIdentifier + 尺寸为 key（PHAsset 编辑后 localIdentifier 不变，
+            // 可能命中陈旧缓存；接受该权衡以换取滚动时的命中性能）
+            return "ph|\(item.assetIdentifier ?? "")|\(maxPixel)"
+        }
     }
 
     private func diskFileURL(key: String, dir: URL) -> URL {

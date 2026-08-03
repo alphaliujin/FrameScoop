@@ -103,8 +103,10 @@ private struct FolderTreeRow: View {
             self.thumbnail = await t
         }
         .contextMenu {
-            Button("在 Finder 中显示") { library.revealFolderInFinder(node) }
-            if node.isRoot {
+            if !node.isPhotosLibrary {
+                Button("在 Finder 中显示") { library.revealFolderInFinder(node) }
+            }
+            if node.isRoot && !node.isPhotosLibrary {
                 Button("重命名") { startRename() }
                 Divider()
                 Button("从侧边栏移除", role: .destructive) {
@@ -148,7 +150,7 @@ private struct FolderPreviewImage: View {
             } else {
                 ZStack {
                     Rectangle().fill(Color.accentColor.opacity(0.15))
-                    Image(systemName: "folder.fill")
+                    Image(systemName: node.isPhotosLibrary ? "photo.stack" : "folder.fill")
                         .foregroundStyle(.tint)
                         .font(.system(size: 16))
                 }

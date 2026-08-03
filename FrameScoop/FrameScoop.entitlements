@@ -16,9 +16,10 @@
 
     <!--
       说明：
-      - 不申请网络权限（应用完全离线运行）
+      - 不申请网络权限（应用完全离线运行；iCloud 照片由系统照片库代理按需下载，非应用直接联网）
       - 不使用任何内核扩展（kext）
-      - 不使用 Photos.framework，故无相册权限声明
+      - 照片库访问通过 Photos.framework（系统照片库守护进程 XPC），经 TCC 授权，
+        无需额外沙盒权限项（仅需 Info.plist 的 NSPhotoLibraryUsageDescription）
       以上为 FrameScoop 运行所需的全部系统权限。
     -->
 </dict>
