@@ -23,8 +23,8 @@ struct ShellResult {
     var isSuccess: Bool { !didTimeOut && terminationStatus == 0 }
 }
 
-/// 命令行执行器：单例，线程安全。
-final class ShellExecutor {
+/// 命令行执行器：单例，线程安全（无实例可变状态，run 每次创建独立 Process）。
+final class ShellExecutor: Sendable {
 
     static let shared = ShellExecutor()
     private init() {}
@@ -79,23 +79,53 @@ final class ShellExecutor {
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
 
-        // 3. 阻塞等待退出（在后台线程更合适，但此处由调用方负责异步调度）
+        // 3. 并发收集两端管道数据并等待退出。
+        //    子进程输出若超过管道缓冲（约 64KB）会写阻塞：若先 waitUntilExit 再
+        //    readDataToEndOfFile 会死锁（子进程被写阻塞无法退出，本线程又在等退出不读管道）。
+        //    用 readabilityHandler 事件驱动收集：有数据就追加，EOF（availableData 为空）即收尾。
+        let stdoutCollector = PipeCollector()
+        let stderrCollector = PipeCollector()
+        outPipe.fileHandleForReading.readabilityHandler = stdoutCollector.handler
+        errPipe.fileHandleForReading.readabilityHandler = stderrCollector.handler
+
         process.waitUntilExit()
         watchdog.cancel()
 
-        let stdout = readPipe(outPipe)
-        let stderr = readPipe(errPipe)
+        // waitUntilExit 返回后子进程已关闭管道，readabilityHandler 会收到 EOF；
+        // 等待两端都读到 EOF 再转字符串，确保数据完整。
+        let stdout = String(data: stdoutCollector.wait(), encoding: .utf8) ?? ""
+        let stderr = String(data: stderrCollector.wait(), encoding: .utf8) ?? ""
 
         return ShellResult(stdout: stdout,
                            stderr: stderr,
                            terminationStatus: process.terminationStatus,
                            didTimeOut: timedOut)
     }
+}
 
-    /// 安全读取管道数据为 UTF-8 字符串
-    private func readPipe(_ pipe: Pipe) -> String {
-        // 注意：在子进程已终止后读取，避免死锁
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+/// 管道数据事件驱动收集器：作为 FileHandle.readabilityHandler 使用。
+/// 回调中追加数据，读到 EOF（availableData 为空）时信号通知。
+/// readabilityHandler 由 FileHandle 在其内部串行队列上调用，故追加与 signal 同队列串行，
+/// semaphore.wait() 与 signal 构成 happens-before，wait 返回后读取 data 安全。
+private final class PipeCollector {
+    private var data = Data()
+    private let done = DispatchSemaphore(value: 0)
+
+    var handler: (FileHandle) -> Void {
+        { [weak self] handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                self?.done.signal()
+            } else {
+                self?.data.append(chunk)
+            }
+        }
+    }
+
+    /// 阻塞至读到 EOF，返回全部收集的数据
+    func wait() -> Data {
+        done.wait()
+        return data
     }
 }

@@ -90,7 +90,7 @@ final class ThumbnailCacheService {
 
     private func diskFileURL(key: String, dir: URL) -> URL {
         // 用 key 的哈希作为文件名，避免非法字符
-        return dir.appendingPathComponent(key.fnv1a() + ".png")
+        return dir.appendingPathComponent(key.fnv1a() + ".jpg")
     }
 
     private func readFromDisk(key: String, dir: URL) -> NSImage? {
@@ -104,11 +104,13 @@ final class ThumbnailCacheService {
     }
 
     private func writeToDisk(image: NSImage, key: String, dir: URL) {
+        // 用 JPEG（质量 0.85）落盘：照片缩略图无需 alpha，体积约为 PNG 的 1/10，
+        // 显著减小磁盘占用、加快写入。带 alpha 的透明图会丢失透明（填黑），对照片浏览器可接受。
         guard let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return }
+              let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
         let file = diskFileURL(key: key, dir: dir)
-        try? png.write(to: file, options: .atomic)
+        try? data.write(to: file, options: .atomic)
         // 写入后异步裁剪磁盘缓存上限：切换缩略图尺寸会产生新 key 的文件，
         // 旧尺寸文件不再命中，需按数量上限回收，避免缓存目录无限膨胀。
         Task.detached(priority: .background) { [dir] in

@@ -30,8 +30,7 @@ struct PhotoLoadService {
                 .creationDateKey,
                 .contentModificationDateKey,
                 .fileSizeKey,
-                .isDirectoryKey,
-                .isHiddenKey
+                .isDirectoryKey
             ]
 
             // 注意：不带 .skipsSubdirectoryDescendants，递归进入所有下级目录

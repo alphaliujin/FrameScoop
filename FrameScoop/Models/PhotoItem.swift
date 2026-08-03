@@ -13,9 +13,10 @@ import Foundation
 /// 遵循 `Codable` 以备未来持久化浏览记录（当前未持久化）。
 struct PhotoItem: Identifiable, Hashable, Codable {
 
-    /// 唯一标识（每次加载随机生成；同一文件跨会话 id 不同，
-    /// 但同一会话内 photos / displayedPhotos / currentPhoto 共用同一批 id，导航与选择一致）
-    let id: UUID
+    /// 唯一标识：基于文件 URL 路径，跨会话与跨 reload 稳定。
+    /// 同一文件在 photos / displayedPhotos / currentPhoto / selectedPhotoIDs 中 id 始终一致，
+    /// 故文件监控触发的 reload 不会让导航索引、选择高亮、胶片条当前格失配。
+    let id: String
 
     /// 图片文件在磁盘上的 URL（沙盒内已通过安全作用域书签授权）
     let url: URL
@@ -46,7 +47,7 @@ struct PhotoItem: Identifiable, Hashable, Codable {
          modificationDate: Date?,
          pixelWidth: Int = 0,
          pixelHeight: Int = 0) {
-        self.id = UUID()
+        self.id = url.path
         self.url = url
         self.name = name
         self.size = size

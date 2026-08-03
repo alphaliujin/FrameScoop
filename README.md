@@ -51,7 +51,6 @@ FrameScoop/
 │   ├── Resources/
 │   │   └── AppIcon.icns           # App 图标（由 generate_icon.sh 生成，CFBundleIconFile 引用）
 │   ├── App/
-│   │   ├── AppearanceConfigurator.swift   # 应用外观一次性配置
 │   │   └── NotificationNames.swift        # 自定义通知名 + 菜单命令通知
 │   ├── Models/                    # 数据模型层（纯值类型）
 │   │   ├── PhotoItem.swift                # 单张图片

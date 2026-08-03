@@ -69,9 +69,11 @@ struct PhotoDetailView: View {
         .focusable()
         .focused($isFocused)
         .onAppear { isFocused = true }
+        // Esc 关闭详情窗口（无对应菜单快捷键，需在此处理）。
+        // 上一张/下一张由 App 层菜单命令的 .keyboardShortcut(.leftArrow/.rightArrow) 统一处理
+        //（菜单 key equivalent 经 performKeyEquivalent 先于 keyDown 派发并消费事件），
+        // 此处不再绑定 onKeyPress 方向键，避免与菜单命令重复触发（双倍跳转）。
         .onKeyPress(.escape) { closeWindow(); return .handled }
-        .onKeyPress(.leftArrow) { library.previousPhoto(); return .handled }
-        .onKeyPress(.rightArrow) { library.nextPhoto(); return .handled }
     }
 
     // MARK: - 主图

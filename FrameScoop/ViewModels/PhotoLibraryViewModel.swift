@@ -39,8 +39,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 避免每次访问都重新排序（网格、胶片条、currentPhotoIndex 都会读取它）。
     @Published private(set) var displayedPhotos: [PhotoItem] = []
 
-    /// 多选中的图片 id
-    @Published var selectedPhotoIDs: Set<UUID> = []
+    /// 多选中的图片 id（基于 url.path，与 PhotoItem.id 一致，跨 reload 稳定）
+    @Published var selectedPhotoIDs: Set<String> = []
 
     /// 详情视图当前展示的图片
     @Published var currentPhoto: PhotoItem?
@@ -93,6 +93,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     private var loadToken = 0
     /// 最近一次加载的 URL：同 URL 的 reload 不递增 token，避免文件监控频繁触发时互相取消
     private var lastLoadedURL: URL?
+    /// 文件夹树重建的版本号：仅最新一次重建结果写回 folderTree，过期结果丢弃
+    private var rebuildToken = 0
 
     private let settingsKey = "FrameScoop.settings"
     /// 加载设置期间置 true，跳过 didSet 中冗余的 persistSettings（避免把刚读出的值又写回）
@@ -132,10 +134,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         loadSettings()
         roots = bookmarkStore.loadAll()
         startAllRootScopes()
-        rebuildTree()
-        if selectedNodeID == nil {
-            // 默认选中首个根文件夹（展示其下含子目录的全部图片）
-            selectedNodeID = folderTree.first?.id
+        // 重建完成后选中首个根文件夹（此时 folderTree 已就绪）
+        rebuildTree { [weak self] in
+            guard let self else { return }
+            if self.selectedNodeID == nil {
+                self.selectedNodeID = self.folderTree.first?.id
+            }
         }
     }
 
@@ -189,8 +193,11 @@ final class PhotoLibraryViewModel: ObservableObject {
                 activeRootURLs.append(nil)
                 errorMessage = "无法恢复文件夹「\(url.lastPathComponent)」的访问权限，请重新添加。"
             }
-            rebuildTree()
-            selectedNodeID = resolvedPath ?? url.path   // 触发 onChange -> loadContent
+            // 树重建（后台枚举）完成后选中新增的根，触发 onChange -> loadContent
+            let selectPath = resolvedPath ?? url.path
+            rebuildTree { [weak self] in
+                self?.selectedNodeID = selectPath
+            }
         } catch {
             errorMessage = "无法保存文件夹权限：\(error.localizedDescription)"
         }
@@ -206,10 +213,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         activeRootURLs.remove(at: idx)
         roots.remove(at: idx)
         bookmarkStore.saveAll(roots)
-        rebuildTree()
-        // 若移除的是当前选中，切到首个根
-        if let sel = selectedNodeID, findNode(id: sel, in: folderTree) == nil {
-            selectedNodeID = folderTree.first?.id
+        // 重建完成后：若当前选中已不在树中（被移除），切到首个根
+        rebuildTree { [weak self] in
+            guard let self else { return }
+            if let sel = self.selectedNodeID, self.findNode(id: sel, in: self.folderTree) == nil {
+                self.selectedNodeID = self.folderTree.first?.id
+            }
         }
     }
 
@@ -250,25 +259,40 @@ final class PhotoLibraryViewModel: ObservableObject {
         activeRootURLs = []
     }
 
-    /// 由 roots（已激活作用域）构建文件夹树
-    private func rebuildTree() {
-        var tree: [FolderNode] = []
-        for (index, root) in roots.enumerated() {
-            guard index < activeRootURLs.count else { continue }
-            // 书签解析失败的根（activeRootURLs[index] 为 nil）跳过，
-            // 避免名字与 URL 错配（张冠李戴）
-            guard let resolved = activeRootURLs[index] else { continue }
-            let children = PhotoLoadService.buildFolderTree(url: resolved)
-            tree.append(FolderNode(
-                id: resolved.path,
-                name: root.name,
-                url: resolved,
-                children: children.isEmpty ? nil : children,
-                isRoot: true,
-                rootID: root.id
-            ))
+    /// 由 roots（已激活作用域）构建文件夹树。
+    /// 目录枚举在后台线程执行（避免大目录树阻塞主线程），完成后回主线程写回 folderTree，
+    /// 再执行 completion（用于设置选中态等依赖 tree 就绪的后置逻辑）。
+    private func rebuildTree(then completion: @MainActor @escaping () -> Void = {}) {
+        rebuildToken += 1
+        let token = rebuildToken
+        // 仅取构建所需字段组成 Sendable 快照（UUID/String/URL 均为 Sendable），
+        // 避免把整个 [PhotoFolder]（非 Sendable）捕获进 @Sendable 后台闭包；
+        // 同时对 roots 与 activeRootURLs 做索引对齐快照，防止枚举期间主线程增删根导致错配。
+        let snapshot: [(id: UUID, name: String, url: URL)] = roots.enumerated().compactMap { index, root in
+            guard index < activeRootURLs.count else { return nil }
+            // 书签解析失败的根（activeRootURLs[index] 为 nil）跳过，避免名字与 URL 错配
+            guard let resolved = activeRootURLs[index] else { return nil }
+            return (id: root.id, name: root.name, url: resolved)
         }
-        folderTree = tree
+        Task { @MainActor [weak self] in
+            let tree = await Task.detached(priority: .userInitiated) { () -> [FolderNode] in
+                snapshot.map { entry in
+                    let children = PhotoLoadService.buildFolderTree(url: entry.url)
+                    return FolderNode(
+                        id: entry.url.path,
+                        name: entry.name,
+                        url: entry.url,
+                        children: children.isEmpty ? nil : children,
+                        isRoot: true,
+                        rootID: entry.id
+                    )
+                }
+            }.value
+            // 过期的重建结果丢弃（用户在此期间又增删了根）
+            guard let self, token == self.rebuildToken else { return }
+            self.folderTree = tree
+            completion()
+        }
     }
 
     /// 递归查找节点
@@ -300,8 +324,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 确保与 reloadCurrentFolder 使用同一 URL 对象，
         // 避免 URL 表示差异导致 lastLoadedURL 比对失败、token 被误增。
         guard let url = selectedNode?.url else {
+            // 节点已不在树中（如刚被移除）但 selectedNodeID 尚未清空：
+            // 停止上一次的文件夹监控并复位加载状态，避免泄漏监控 fd 与残留空加载
+            monitor.stop()
             isLoading = false
             photos = []
+            lastLoadedURL = nil
             return
         }
         loadPhotos(from: url)
@@ -406,9 +434,16 @@ final class PhotoLibraryViewModel: ObservableObject {
     }
 
     /// 删除选中图片到废纸篓（原生，可恢复）
-    func trashPhotos(_ ids: Set<UUID>) {
+    func trashPhotos(_ ids: Set<String>) {
         let urls = photos.filter { ids.contains($0.id) }.map { $0.url }
         guard !urls.isEmpty else { return }
+        // 若被删图片中有当前正在详情视图查看的，先清空 currentPhoto：
+        // 触发 DetailWindowRoot 关闭详情窗口，避免显示已废纸篓的陈旧大图
+        if let current = currentPhoto, ids.contains(current.id) {
+            currentPhoto = nil
+        }
+        // 同步移出选择集合，避免残留无效 id
+        selectedPhotoIDs.subtract(ids)
         var failedCount = 0
         for url in urls {
             var resultingURL: NSURL?

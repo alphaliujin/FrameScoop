@@ -35,25 +35,30 @@ struct MetadataService {
 
         // 2) 系统命令 mdls：读取 Spotlight 富元数据（含 EXIF）
         //    ShellExecutor 全程异常捕获 + 超时 8s 自动终止；
-        //    在后台线程执行，避免同步阻塞 cooperative 线程池。
         //    像素尺寸已由上方 CGImageSource 取得，故不再向 mdls 请求 kMDItemPixelWidth/Height。
-        let result = await Task.detached(priority: .utility) { [shell] in
-            shell.run(
-                "/usr/bin/mdls",
-                arguments: [
-                    "-name", "kMDItemAcquisitionMake",
-                    "-name", "kMDItemAcquisitionModel",
-                    "-name", "kMDItemFocalLength",
-                    "-name", "kMDItemFNumber",
-                    "-name", "kMDItemISOSpeed",
-                    "-name", "kMDItemExposureTimeSeconds",
-                    "-name", "kMDItemContentCreationDate",
-                    "-raw",
-                    url.path
-                ],
-                timeout: 8
-            )
-        }.value
+        //    在 GCD 全局队列执行阻塞调用（而非 Task.detached 协作线程池）：
+        //    waitUntilExit 最长阻塞 8s，占用协作 worker 会饿死协作任务；GCD 队列可独立扩容线程，
+        //    通过 continuation 桥接回 async。
+        let result = await withCheckedContinuation { (continuation: CheckedContinuation<ShellResult, Never>) in
+            DispatchQueue.global(qos: .utility).async { [shell] in
+                let res = shell.run(
+                    "/usr/bin/mdls",
+                    arguments: [
+                        "-name", "kMDItemAcquisitionMake",
+                        "-name", "kMDItemAcquisitionModel",
+                        "-name", "kMDItemFocalLength",
+                        "-name", "kMDItemFNumber",
+                        "-name", "kMDItemISOSpeed",
+                        "-name", "kMDItemExposureTimeSeconds",
+                        "-name", "kMDItemContentCreationDate",
+                        "-raw",
+                        url.path
+                    ],
+                    timeout: 8
+                )
+                continuation.resume(returning: res)
+            }
+        }
 
         guard result.isSuccess else {
             #if DEBUG
