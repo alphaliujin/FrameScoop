@@ -6,12 +6,13 @@
 //
 //  - 根节点 = 用户添加的文件夹（可重命名 / 移除）
 //  - 子节点 = 子目录，递归构建，可逐级展开
-//  - 每行相簿风格：首图缩略预览 + 名称 + 递归图片数（懒加载）
+//  - 每行：系统默认文件夹图标（或照片库符号）+ 名称 + 递归图片数（懒加载），不显示图片缩略图
 //  - 选中任意节点由 ContentView 的 onChange 触发加载
 //
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
@@ -69,16 +70,14 @@ private struct FolderTreeRow: View {
     @Binding var renamingNodeID: String?
     @State private var renameText: String = ""
     @State private var count: Int?
-    @State private var thumbnail: NSImage?
     @EnvironmentObject var library: PhotoLibraryViewModel
 
     private var isRenaming: Bool { renamingNodeID == node.id }
 
     var body: some View {
         HStack(spacing: 10) {
-            FolderPreviewImage(node: node, image: $thumbnail)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            FolderNodeIcon(node: node)
+                .frame(width: 28, height: 22)
 
             if isRenaming {
                 TextField("名称", text: $renameText, onCommit: commitRename)
@@ -96,11 +95,8 @@ private struct FolderTreeRow: View {
             Spacer()
         }
         .task(id: node.id) {
-            // 并行加载计数与缩略图
-            async let c = library.countImages(for: node)
-            async let t = library.previewThumbnail(for: node)
-            self.count = await c
-            self.thumbnail = await t
+            // 仅加载图片计数（不再加载首图缩略图，文件夹用系统默认图标）
+            self.count = await library.countImages(for: node)
         }
         .contextMenu {
             if !node.isPhotosLibrary {
@@ -135,26 +131,22 @@ private struct FolderTreeRow: View {
     }
 }
 
-// MARK: - 文件夹预览缩略图
+// MARK: - 文件夹图标
 
-private struct FolderPreviewImage: View {
+private struct FolderNodeIcon: View {
     let node: FolderNode
-    @Binding var image: NSImage?
 
     var body: some View {
-        Group {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                ZStack {
-                    Rectangle().fill(Color.accentColor.opacity(0.15))
-                    Image(systemName: node.isPhotosLibrary ? "photo.stack" : "folder.fill")
-                        .foregroundStyle(.tint)
-                        .font(.system(size: 16))
-                }
-            }
+        if node.isPhotosLibrary {
+            // 照片库节点非文件夹：用照片堆叠符号区分
+            Image(systemName: "photo.stack")
+                .foregroundStyle(.tint)
+                .font(.system(size: 20))
+        } else {
+            // 文件夹节点：使用 macOS 系统默认文件夹图标（Finder 蓝色文件夹），不加载首图缩略图
+            Image(nsImage: NSWorkspace.shared.icon(for: .folder))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
         }
     }
 }

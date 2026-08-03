@@ -442,26 +442,6 @@ final class PhotoLibraryViewModel: ObservableObject {
         }.value
     }
 
-    /// 获取节点的预览缩略图（取该文件夹/照片库首图）。
-    func previewThumbnail(for node: FolderNode) async -> NSImage? {
-        if node.isPhotosLibrary {
-            let id = await Task.detached(priority: .utility) { () -> String? in
-                PHAsset.fetchAssets(with: .image, options: nil).firstObject?.localIdentifier
-            }.value
-            guard let id else { return nil }
-            return await PhotosLibraryService.shared.image(for: id, maxPixel: 96)
-        }
-        guard let url = node.url else { return nil }
-        // firstImageURL 是递归目录枚举，放到后台线程避免阻塞 UI（与 countImages 一致）
-        let firstImage = await Task.detached(priority: .utility) {
-            PhotoLoadService.firstImageURL(in: url)
-        }.value
-        guard let firstImage else { return nil }
-        let item = PhotoItem(url: firstImage, name: "", size: 0,
-                             creationDate: nil, modificationDate: nil)
-        return await ThumbnailCacheService.shared.thumbnail(for: item, maxPixel: 96)
-    }
-
     /// 在 Finder 中显示某节点文件夹（照片库节点无对应文件，无操作）
     func revealFolderInFinder(_ node: FolderNode) {
         guard let url = node.url else { return }

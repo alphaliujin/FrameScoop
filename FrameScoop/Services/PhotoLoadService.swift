@@ -103,28 +103,6 @@ struct PhotoLoadService {
         return count
     }
 
-    /// 在文件夹中（含所有下级目录）查找第一张图片的 URL。
-    /// 用于侧边栏相簿风格的缩略图预览，开销远小于枚举全部文件。
-    /// - Parameter url: 已激活安全作用域的文件夹 URL
-    /// - Returns: 第一张图片的 URL；无图片时返回 nil
-    static func firstImageURL(in url: URL) -> URL? {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]   // 递归
-        ) else {
-            return nil
-        }
-        while let fileURL = enumerator.nextObject() as? URL {
-            let ext = fileURL.pathExtension.lowercased()
-            if Self.supportedExtensions.contains(ext) {
-                return fileURL
-            }
-        }
-        return nil
-    }
-
     /// 递归构建文件夹的子目录树（仅目录，不枚举图片文件，速度快）。
     /// 用于侧边栏「逐级展开」。调用前须确保该文件夹的安全作用域已激活。
     /// - Parameters:
