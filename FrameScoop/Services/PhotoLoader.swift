@@ -19,7 +19,15 @@ enum PhotoLoader {
         switch item.sourceKind {
         case .folder:
             guard let url = item.url else { return nil }
-            return ThumbnailGenerator.generate(url: url, maxPixel: maxPixel)
+            // ImageIO 降采样是同步阻塞调用。若在协作线程池上执行，人脸模糊检测并发取数百张
+            // 缩略图时，个别图（iCloud 占位 / 大 RAW 等）在 ImageIO 中卡住会占满协作池线程，
+            // 导致 withTaskGroup 的 for await 永远调度不上来、进度死锁卡在 0。挪到 GCD 线程执行，
+            // 协作池保持空闲承接 await 续体；结果不变。
+            return await withCheckedContinuation { cont in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    cont.resume(returning: ThumbnailGenerator.generate(url: url, maxPixel: maxPixel))
+                }
+            }
         case .photoLibrary:
             guard let id = item.assetIdentifier else { return nil }
             return await PhotosLibraryService.shared.image(for: id, maxPixel: maxPixel)

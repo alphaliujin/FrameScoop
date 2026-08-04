@@ -22,6 +22,11 @@ struct ContentView: View {
             PhotoGridView()
         }
         .navigationTitle(library.selectedNode?.name ?? "FrameScoop")
+        // 右侧智能筛选边栏（占位，后续逐步添加筛选条件）
+        .inspector(isPresented: $library.showsFilterPanel) {
+            FilterSidebarView()
+                .inspectorColumnWidth(min: 200, ideal: 260, max: 360)
+        }
         // 选中文件夹节点变化时加载其内容。onChange 在视图更新事务之后执行，
         // 因此 loadContent 内修改 @Published 是安全的（不会在 view updates 期间发布）。
         .onChange(of: library.selectedNodeID) { _, newID in

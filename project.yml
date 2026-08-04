@@ -17,7 +17,10 @@ settings:
     # 使用我们手写的 Info.plist，禁止 Xcode 自动生成
     GENERATE_INFOPLIST_FILE: NO
     DEVELOPMENT_TEAM: ""
-    CODE_SIGN_STYLE: Automatic
+    # Manual + 自签名证书：designated requirement 基于证书而非 cdhash，
+    # 代码改动不再使 TCC（照片库等）授权失效，Xcode 调试也稳定。替代 ad-hoc。
+    # 自签名证书不过期、不被撤销，比被撤销的 Apple Development 证书更可靠。
+    CODE_SIGN_STYLE: Manual
 
 targets:
   FrameScoop:
@@ -37,9 +40,14 @@ targets:
         CODE_SIGN_ENTITLEMENTS: FrameScoop/FrameScoop.entitlements
         # 启用 Hardened Runtime（公证必需）
         ENABLE_HARDENED_RUNTIME: YES
-        # 未配置开发者账号时使用临时签名（ad-hoc），便于本地构建测试
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Automatic
+        # 关闭 Xcode 15 Debug Dylib Support：自签名证书无 TeamIdentifier，
+        # 拆出的 FrameScoop.debug.dylib 与主二进制 Team ID 不匹配，dyld library
+        # validation 拒绝加载 -> dyld abort -> SIGABRT。关掉后 Debug 直接编进主二进制。
+        ENABLE_DEBUG_DYLIB: NO
+        # 用自签名证书 "FrameScoop Dev" 签名（稳定身份，DR 锚定证书而非 cdhash）
+        # 代码改动重签后 TCC（照片库等）授权保持有效，Xcode 调试稳定
+        CODE_SIGN_IDENTITY: "FrameScoop Dev"
+        CODE_SIGN_STYLE: Manual
         # App 图标通过 FrameScoop/Resources/AppIcon.icns 打包，由 CFBundleIconFile 引用
         # （跨 SDK 稳定，避免 asset catalog 单尺寸图标兼容问题）
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

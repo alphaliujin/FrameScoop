@@ -94,7 +94,7 @@ private struct FolderTreeRow: View {
             }
             Spacer()
         }
-        .task(id: node.id) {
+        .task(id: node.isPhotosLibrary ? "\(node.id)#\(library.photosAuthTick)" : node.id) {
             // 仅加载图片计数（不再加载首图缩略图，文件夹用系统默认图标）
             self.count = await library.countImages(for: node)
         }
