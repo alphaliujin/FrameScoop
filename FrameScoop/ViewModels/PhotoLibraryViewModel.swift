@@ -411,7 +411,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
         let token = loadToken
         Task {
+            // 鉴权前原始状态：0=notDetermined 1=restricted 2=denied 3=authorized
+            let rawBefore = PHPhotoLibrary.authorizationStatus(for: .readWrite).rawValue
             let status = await PhotosLibraryService.shared.requestAuthorization()
+            #if DEBUG
+            self.dbg("[DBG] photosLibrary auth before=\(rawBefore) after=\(status)")
+            #endif
             guard token == loadToken else { return }
             guard status == .authorized else {
                 self.photos = []
@@ -420,6 +425,9 @@ final class PhotoLibraryViewModel: ObservableObject {
                 return
             }
             let items = await PhotosLibraryService.shared.loadAllPhotos()
+            #if DEBUG
+            self.dbg("[DBG] photosLibrary loaded items=\(items.count)")
+            #endif
             guard token == loadToken else { return }
             self.photos = items
             self.isLoading = false
