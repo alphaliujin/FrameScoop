@@ -58,17 +58,14 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 当前选中文件夹的图片（未排序原始顺序，含下级目录）
     @Published var photos: [PhotoItem] = [] {
         didSet {
-            // 仅当照片集合（id）实际变化时才重启检测；同一文件夹的 reload（文件监控、
-            // iCloud 同步触动的元数据/属性变化等若内容不变）不取消在途检测，
-            // 否则进度会被反复顶掉 token 而永远卡在「已识别 0」。
+            // 仅当照片集合（id）实际变化时才重启预计算；同一文件夹的 reload（文件监控、
+            // iCloud 同步触动的元数据/属性变化等若内容不变）不打断在途预计算，
+            // 否则进度会被反复顶掉 token 而永远卡在「图片数据导入：0/xxx」。
             let changed = Set(oldValue.map(\.id)) != Set(photos.map(\.id))
-            if showsBurstFilter || showsBlurFilter {
-                if changed {
-                    if showsBurstFilter { detectBurstsIfNeeded() }
-                    if showsBlurFilter { detectBlurryIfNeeded() }
-                } else {
-                    rebuildDisplayedPhotos()
-                }
+            if changed {
+                // 切到不同照片集合：自动预计算连拍 dHash + 人脸模糊分（侧栏「图片数据导入」进度）。
+                // 某筛选正显示时，precomputeAnalysis 内部按缓存即时重排并在流式落库时刷新视图。
+                precomputeAnalysis()
             } else {
                 rebuildDisplayedPhotos()
             }
@@ -118,15 +115,15 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     /// 连拍筛选：开启后按画面相似（dHash）识别连拍并分段显示
     @Published var showsBurstFilter: Bool = false {
-        didSet { detectBurstsIfNeeded() }
+        didSet {
+            // 与人脸清晰度筛选互斥：开连拍时关掉人脸筛选（置 false 不会反向触发本 didSet）
+            if showsBurstFilter { showsBlurFilter = false }
+            detectBurstsIfNeeded()
+        }
     }
     /// 连拍相似度阈值（dHash Hamming 距离）：<= 此值视为画面相似；越小越严格
     @Published var burstSimilarityThreshold: Int = 10 {
         didSet { regroupBursts() }
-    }
-    /// 仅显示连拍组内的照片（隐藏非连拍单张）
-    @Published var showsBurstOnly: Bool = false {
-        didSet { rebuildDisplayedPhotos() }
     }
     /// 连拍分组结果（连拍模式有效；空表示未检测/无连拍）
     @Published private(set) var burstSegments: [BurstSegment] = []
@@ -135,12 +132,19 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 是否正在识别连拍（后台取图算哈希中）
     @Published private(set) var isBurstDetecting: Bool = false
 
-    /// 人脸模糊筛选：开启后检测人脸并判断人脸是否模糊（任一清晰即不算），左上角标红感叹号
+    /// 人脸筛选（模糊 + 闭眼，一次 Vision）：开启后检测人脸 landmark，同时判断人脸模糊与闭眼。
     @Published var showsBlurFilter: Bool = false {
-        didSet { detectBlurryIfNeeded() }
+        didSet {
+            // 与连拍筛选互斥：开人脸筛选时关掉连拍（置 false 不会反向触发本 didSet）
+            if showsBlurFilter { showsBurstFilter = false }
+            // 关闭时复位「只显示」开关：避免它们残留为 true 时 rebuildDisplayedPhotos 用空集合
+            // 把网格滤空（如切到连拍筛选时 base 变成连拍段但仍按空模糊集过滤）
+            else { showsBlurOnly = false; showsEyeClosedOnly = false }
+            detectBlurryIfNeeded()
+        }
     }
     /// 人脸模糊判定阈值（拉普拉斯方差）：score 低于此值视为该人脸模糊；越小越严格
-    @Published var blurThreshold: Double = 100.0 {
+    @Published var blurThreshold: Double = 50.0 {
         didSet { regroupBlurry() }
     }
     /// 仅显示人脸模糊照片（隐藏无人脸或人脸清晰的照片）
@@ -153,6 +157,27 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published private(set) var partialBlurryPhotoIDs: Set<String> = []
     /// 是否正在识别人脸模糊（后台检测人脸 + 算 FFT）
     @Published private(set) var isBlurDetecting: Bool = false
+
+    /// 闭眼筛选阈值（EAR 眼睛纵横比）：低于此值视为闭眼；越小越严格。
+    /// 与人脸模糊同一次 VNDetectFaceLandmarksRequest 算出，阈值变化即时复用、不重取图。
+    @Published var eyeClosedThreshold: Double = 0.20 {
+        didSet { regroupBlurry() }
+    }
+    /// 仅显示闭眼照片（隐藏无人脸或睁眼的照片）
+    @Published var showsEyeClosedOnly: Bool = false {
+        didSet { rebuildDisplayedPhotos() }
+    }
+    /// 所有人脸都闭眼 -> 标红 eye.slash
+    @Published private(set) var closedEyePhotoIDs: Set<String> = []
+    /// 有睁有闭 -> 标黄 eye.slash
+    @Published private(set) var partialClosedEyePhotoIDs: Set<String> = []
+
+    /// 图片数据导入：文件夹加载后自动预计算连拍 dHash + 人脸模糊分。
+    /// 每张照片从 512px 缩略图一次取图同时算两份结果；侧栏底部显示「图片数据导入：xx/xxx 张」。
+    /// 与筛选开关解耦：无论是否开启任一筛选都先算好数据，开关切换即时命中缓存。
+    @Published private(set) var isPrecomputing = false
+    @Published private(set) var precomputeDone = 0
+    @Published private(set) var precomputeTotal = 0
 
     /// 用户可关闭的错误提示（非空时弹窗）
     @Published var errorMessage: String?
@@ -418,6 +443,10 @@ final class PhotoLibraryViewModel: ObservableObject {
         blurDetectToken += 1
         selectedPhotoIDs.removeAll()
         currentPhoto = nil
+        // 立即清空旧照片：避免切到新源时网格短暂残留上一个源的照片（如照片库 -> 文件夹），
+        // 并尽早取消上一个源的在途预计算（photos=[] 的 didSet 会 cancel precomputeTask）。
+        // isLoading 会在下方 loadPhotos/loadPhotosLibrary 置 true，故网格走「正在读取」加载态而非空态。
+        photos = []
 
         guard id != nil else {
             monitor.stop()
@@ -446,8 +475,12 @@ final class PhotoLibraryViewModel: ObservableObject {
             monitor.stop()
             isLoading = false
             photos = []
+            photosAccessDenied = false
             return
         }
+        // 切到文件夹源：照片库的「被拒」标记与本源无关，必须清掉，否则网格会命中
+        // photosAccessDenied 分支而显示「无法访问照片库」而非文件夹内容。
+        photosAccessDenied = false
         loadPhotos(from: url)
         monitor.startMonitoring(url: url)   // 内部会先停止上一次监控
     }
@@ -465,6 +498,8 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     private func loadPhotos(from url: URL) {
         isLoading = true
+        // 文件夹源永不为「照片库被拒」；清掉残留（如从被拒的照片图库切回），避免网格误显拒绝态
+        photosAccessDenied = false
         // 仅切换到不同文件夹时递增 token(取消在途的旧文件夹加载);
         // 同一文件夹的 reload 不递增,避免文件监控频繁触发时加载任务互相取消而永不更新
         if lastLoadedKey != url.path {
@@ -796,23 +831,20 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     // MARK: - 排序
 
-    /// 用于布局的连拍段：showsBurstOnly 时过滤掉单张段，仅保留连拍组
+    /// 用于布局的连拍段：开启连拍筛选时仅保留连拍组（隐藏非连拍单张）
     var displayedBurstSegments: [BurstSegment] {
         guard showsBurstFilter else { return [] }
-        if showsBurstOnly {
-            return burstSegments.filter { segment in
-                if case .burst = segment { return true }
-                return false
-            }
+        return burstSegments.filter { segment in
+            if case .burst = segment { return true }
+            return false
         }
-        return burstSegments
     }
 
     /// 重算缓存的展示结果（在 photos / sortOption / sortOrder / 连拍分组 / 模糊过滤变化时由 didSet 调用）
     private func rebuildDisplayedPhotos() {
         let base: [PhotoItem]
         if showsBurstFilter && !burstSegments.isEmpty {
-            // 连拍模式：按段扁平化（段内按时间升序，连拍组连续）；showsBurstOnly 时仅连拍组
+            // 连拍模式：按段扁平化（段内按时间升序，连拍组连续）；仅连拍组（单张已过滤）
             base = displayedBurstSegments.flatMap { seg -> [PhotoItem] in
                 switch seg {
                 case .single(let p): return [p]
@@ -822,10 +854,192 @@ final class PhotoLibraryViewModel: ObservableObject {
         } else {
             base = sort(photos)
         }
-        // showsBlurOnly：只留人脸模糊照片（红/黄都算；覆盖连拍分组布局，统一用普通 FlowLayout 展示）
-        displayedPhotos = showsBlurOnly
-            ? base.filter { blurryPhotoIDs.contains($0.id) || partialBlurryPhotoIDs.contains($0.id) }
+        // showsBlurOnly / showsEyeClosedOnly：任一开启即过滤；两者同开取交集（既模糊又闭眼）。
+        // 覆盖连拍分组布局，统一用普通 FlowLayout 展示。
+        let blurOnly = showsBlurOnly
+        let eyeOnly = showsEyeClosedOnly
+        displayedPhotos = (blurOnly || eyeOnly)
+            ? base.filter {
+                (!blurOnly || blurryPhotoIDs.contains($0.id) || partialBlurryPhotoIDs.contains($0.id))
+                && (!eyeOnly || closedEyePhotoIDs.contains($0.id) || partialClosedEyePhotoIDs.contains($0.id))
+            }
             : base
+    }
+
+    // MARK: - 图片数据导入（连拍 dHash + 人脸模糊 预计算）
+
+    /// 预计算后台任务句柄：切文件夹时 cancel 旧任务（协同取消：在途子任务排空即止，不再补充），
+    /// 避免切走后旧文件夹的 Vision 计算继续空跑。
+    private var precomputeTask: Task<Void, Never>?
+    /// 预计算版本号：切文件夹递增，mergePrecomputeBatch / 结束存盘均校验丢弃过期结果。
+    private var precomputeToken = 0
+    /// 当前预计算的照片 mtime 表（主线程读写）：供周期性/结束时存盘合并用，避免逐批透传。
+    private var precomputeMtimeOf: [String: Double] = [:]
+    /// 周期性存盘检查点：每攒够 128 张落盘一次，防止预计算被中断（退出/切文件夹）而全丢。
+    private var precomputeSavedCheckpoint = 0
+
+    /// 文件夹加载后自动预计算：每张照片从 512px 缩略图一次取图，同时算 dHash(连拍)+blurScore(人脸模糊)。
+    /// 与筛选开关解耦--无论是否开启筛选都先算好；磁盘已存且 mtime 未变的直接复用，仅算缺失的。
+    /// 侧栏底部显示「图片数据导入：xx/xxx 张」。切文件夹 cancel + 递增 token 取消在途任务。
+    private func precomputeAnalysis() {
+        let photos = self.photos
+        guard !photos.isEmpty else {
+            precomputeTask?.cancel()
+            precomputeDone = 0
+            precomputeTotal = 0
+            isPrecomputing = false
+            rebuildDisplayedPhotos()
+            return
+        }
+        precomputeTask?.cancel()
+        precomputeToken += 1
+        let token = precomputeToken
+
+        // 清陈旧缓存（切到新文件夹：旧 id 已不在列表），避免旧分组/标记残留
+        let liveIDs = Set(photos.map { $0.id })
+        self.burstHashes = self.burstHashes.filter { liveIDs.contains($0.key) }
+        self.blurScores = self.blurScores.filter { liveIDs.contains($0.key) }
+        self.blurryPhotoIDs = self.blurryPhotoIDs.filter { liveIDs.contains($0) }
+        self.partialBlurryPhotoIDs = self.partialBlurryPhotoIDs.filter { liveIDs.contains($0) }
+        self.closedEyePhotoIDs = self.closedEyePhotoIDs.filter { liveIDs.contains($0) }
+        self.partialClosedEyePhotoIDs = self.partialClosedEyePhotoIDs.filter { liveIDs.contains($0) }
+
+        let persisted = PhotoAnalysisStore.load()
+        let mtimeOf: [String: Double] = Dictionary(
+            photos.compactMap { p in p.modificationDate.map { (p.id, $0.timeIntervalSince1970) } },
+            uniquingKeysWith: { a, _ in a }
+        )
+        self.precomputeMtimeOf = mtimeOf
+        // 需计算：磁盘无条目 / mtime 变 / 缺 dHash 或 blur 或 blur.eyeState（旧缓存未算闭眼）任一
+        let toCompute = photos.filter { p in
+            guard let entry = persisted[p.id],
+                  let m = mtimeOf[p.id],
+                  abs(m - entry.mtime) < 1.0 else { return true }
+            return entry.dHash == nil || entry.blur == nil || entry.blur?.eyeState == nil
+        }
+        let toComputeIDs = Set(toCompute.map { $0.id })
+        // 复用：磁盘已存且 mtime 未变的，先填进内存缓存（筛选切换即时命中、regroup 即时可用）
+        for photo in photos where !toComputeIDs.contains(photo.id) {
+            guard let entry = persisted[photo.id] else { continue }
+            if let dh = entry.dHash { self.burstHashes[photo.id] = dh }
+            if let bl = entry.blur {
+                self.blurScores[photo.id] = bl
+                classifyBlurry(photo.id, bl)
+                classifyEyeClosed(photo.id, bl)
+            }
+        }
+
+        precomputeTotal = photos.count
+        precomputeDone = photos.count - toCompute.count
+        // 检查点从「已复用数」起算：周期存盘按新算的张数计（每 128 张），避免首批触发冗余全量写
+        precomputeSavedCheckpoint = precomputeDone
+        isPrecomputing = !toCompute.isEmpty
+        self.dbg("[PRE] reused=\(precomputeDone) compute=\(toCompute.count) total=\(photos.count)")
+
+        // 反映到视图：筛选在显示则按（已复用的）缓存重排，否则普通重排
+        if showsBurstFilter { regroupBursts() }
+        else if showsBlurFilter { regroupBlurry() }
+        else { rebuildDisplayedPhotos() }
+
+        guard !toCompute.isEmpty else { return }
+
+        precomputeTask = Task.detached(priority: .userInitiated) { [weak self] in
+            // 单张任务体：512px 缩略图一次取图，同时算 dHash + blurScore（Vision 走 off-pool async，
+            // 避免同步阻塞压垮协作池；与独立模糊检测的取图尺寸一致，小脸也有 4 倍细节）
+            let child: @Sendable (PhotoItem) async -> (String, UInt64?, FaceBlurScore?) = { photo in
+                let img = await ThumbnailCacheService.shared.thumbnail(for: photo, maxPixel: 512)
+                guard let img else { return (photo.id, nil, nil) }
+                // 取图后若已取消（切了文件夹），跳过昂贵的 Vision + 拉普拉斯
+                if Task.isCancelled { return (photo.id, nil, nil) }
+                let dh = BurstDetectionService.dHash(of: img)
+                let bl = await BlurDetectionService.blurScoreAsync(of: img)
+                return (photo.id, dh, bl)
+            }
+            await withTaskGroup(of: (String, UInt64?, FaceBlurScore?).self) { group in
+                // 限制在途并发：一次性提交数千个子任务会把协作线程池压垮（每个又 spawn
+                // 取图 + Vision），导致调度停滞、进度死锁。维持最多 maxInflight 个在途，每完成一个补一个。
+                let maxInflight = 16
+                var iter = toCompute.makeIterator()
+                // 流式收集：攒满 16 张就回主线程落库 + 刷新进度，用户早看到结果
+                var batchD: [(String, UInt64)] = []
+                var batchB: [(String, FaceBlurScore)] = []
+                var doneDelta = 0
+                for _ in 0..<Swift.min(maxInflight, toCompute.count) {
+                    guard let photo = iter.next() else { break }
+                    group.addTask { await child(photo) }
+                }
+                for await (id, dh, bl) in group {
+                    if let dh { batchD.append((id, dh)) }
+                    if let bl { batchB.append((id, bl)) }
+                    doneDelta += 1
+                    if doneDelta >= 16 {
+                        let d = batchD; batchD = []
+                        let b = batchB; batchB = []
+                        let dd = doneDelta; doneDelta = 0
+                        await MainActor.run { self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
+                    }
+                    // 已取消（切了文件夹）：不再补充新任务，让在途子任务排空即止
+                    if Task.isCancelled { continue }
+                    if let photo = iter.next() {
+                        group.addTask { await child(photo) }
+                    }
+                }
+                // 尾批
+                if doneDelta > 0 || !batchD.isEmpty || !batchB.isEmpty {
+                    let d = batchD; let b = batchB; let dd = doneDelta
+                    await MainActor.run { self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
+                }
+            }
+            // 全部完成：关进度 + 存盘（token 不匹配=已切文件夹，丢弃）
+            await MainActor.run {
+                guard let self, token == self.precomputeToken else { return }
+                self.isPrecomputing = false
+                self.persistPrecompute()
+            }
+        }
+    }
+
+    /// 预计算一批结果落库：增量更新内存缓存（dHash + blur）+ 刷新进度，
+    /// 若某筛选正显示则按新数据重排（流式刷新视图）。每攒 128 张周期性存盘一次，
+    /// 防止预计算被中断（退出/切文件夹）而全丢。
+    private func mergePrecomputeBatch(
+        dhashes: [(String, UInt64)],
+        blurs: [(String, FaceBlurScore)],
+        doneDelta: Int,
+        token: Int
+    ) {
+        guard token == precomputeToken else { return }
+        for (id, h) in dhashes { burstHashes[id] = h }
+        for (id, s) in blurs { blurScores[id] = s; classifyBlurry(id, s); classifyEyeClosed(id, s) }
+        precomputeDone += doneDelta
+        if showsBurstFilter { regroupBursts() }
+        else if showsBlurFilter { regroupBlurry() }
+        // 周期性存盘：每 128 张落一次，中断也不至于全丢
+        if precomputeDone - precomputeSavedCheckpoint >= 128 {
+            precomputeSavedCheckpoint = precomputeDone
+            self.dbg("[PRE] progress \(precomputeDone)/\(precomputeTotal)")
+            persistPrecompute()
+        }
+    }
+
+    /// 预计算结束：把内存里的 dHash + blur 合并写盘（保留其他文件夹条目，dHash/blur 互不覆盖）。
+    /// 重新读最新磁盘，避免与本会话其他来源的写互相覆盖。
+    private func persistPrecompute() {
+        let mtimeOf = self.precomputeMtimeOf
+        var merged = PhotoAnalysisStore.load()
+        for (id, h) in self.burstHashes {
+            let existing = merged[id]
+            merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,
+                          dHash: h,
+                          blur: existing?.blur)
+        }
+        for (id, s) in self.blurScores {
+            let existing = merged[id]
+            merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,
+                          dHash: existing?.dHash,
+                          blur: s)
+        }
+        PhotoAnalysisStore.save(merged)
     }
 
     // MARK: - 连拍识别
@@ -835,18 +1049,43 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 串行化异步检测：仅采纳最新一次的结果，避免旧任务覆盖新结果
     private var burstDetectToken = 0
 
-    /// 开启/照片变化时：后台并行取小图算 dHash，再分组
+    /// 开启/照片变化时：后台并行取小图算 dHash，再分组。
+    /// dHash 跨会话持久化（PhotoAnalysisStore）：mtime 未变的照片直接复用磁盘哈希，
+    /// 跳过取图+算哈希；仅对新增/改动的照片计算。
     private func detectBurstsIfNeeded() {
         guard showsBurstFilter else {
             applyBurstSegments([])
+            return
+        }
+        if isPrecomputing {
+            // 预计算进行中：内存缓存正被流式填充，直接按其分组即可（预计算会持续刷新），
+            // 不再起独立检测任务，避免与预计算重复取图/算哈希、争用磁盘写。
+            regroupBursts()
             return
         }
         burstDetectToken += 1
         let token = burstDetectToken
         isBurstDetecting = true
         let photos = self.photos
-        let cached = self.burstHashes
-        let toCompute = photos.filter { cached[$0.id] == nil }
+        let cached = self.burstHashes                 // 本会话内存缓存
+        let persisted = PhotoAnalysisStore.load()     // 跨会话磁盘缓存（dHash + blur 合并）
+        let mtimeOf: [String: Double] = Dictionary(
+            photos.compactMap { p in p.modificationDate.map { (p.id, $0.timeIntervalSince1970) } },
+            uniquingKeysWith: { a, _ in a }
+        )
+        var toCompute: [PhotoItem] = []
+        var reusedFromDisk: [String: UInt64] = [:]
+        for photo in photos where cached[photo.id] == nil {
+            if let entry = persisted[photo.id],
+               let m = mtimeOf[photo.id],
+               abs(m - entry.mtime) < 1.0,             // mtime 未变 -> 复用磁盘哈希
+               let dh = entry.dHash {
+                reusedFromDisk[photo.id] = dh
+            } else {
+                toCompute.append(photo)
+            }
+        }
+        self.dbg("[BURST] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
         Task.detached(priority: .utility) { [weak self] in
             let newHashes: [String: UInt64] = await withTaskGroup(of: (String, UInt64?).self) { group in
                 for photo in toCompute {
@@ -862,6 +1101,7 @@ final class PhotoLibraryViewModel: ObservableObject {
             await MainActor.run {
                 guard let self, token == self.burstDetectToken else { return }
                 var hashes = cached
+                for (id, h) in reusedFromDisk { hashes[id] = h }
                 for (id, h) in newHashes { hashes[id] = h }
                 let liveIDs = Set(photos.map { $0.id })
                 self.burstHashes = hashes.filter { liveIDs.contains($0.key) }
@@ -871,6 +1111,16 @@ final class PhotoLibraryViewModel: ObservableObject {
                     similarityThreshold: self.burstSimilarityThreshold
                 ))
                 self.isBurstDetecting = false
+                // 持久化：磁盘已有条目（含其他文件夹、含 blur 字段）合并本轮 (mtime, dHash)，
+                // 保留已存的 blur（互不覆盖）。
+                var merged = persisted
+                for (id, h) in self.burstHashes {
+                    let existing = merged[id]
+                    merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,
+                                 dHash: h,
+                                 blur: existing?.blur)
+                }
+                PhotoAnalysisStore.save(merged)
             }
         }
     }
@@ -920,7 +1170,15 @@ final class PhotoLibraryViewModel: ObservableObject {
         guard showsBlurFilter else {
             blurryPhotoIDs = []
             partialBlurryPhotoIDs = []
+            closedEyePhotoIDs = []
+            partialClosedEyePhotoIDs = []
             rebuildDisplayedPhotos()
+            return
+        }
+        if isPrecomputing {
+            // 预计算进行中：内存缓存正被流式填充，直接按其分类即可（预计算会持续刷新），
+            // 不再起独立检测任务，避免与预计算重复取图/Vision、争用磁盘写。
+            regroupBlurry()
             return
         }
         let photos = self.photos
@@ -929,40 +1187,79 @@ final class PhotoLibraryViewModel: ObservableObject {
         self.blurScores = self.blurScores.filter { liveIDs.contains($0.key) }
         self.blurryPhotoIDs = self.blurryPhotoIDs.filter { liveIDs.contains($0) }
         self.partialBlurryPhotoIDs = self.partialBlurryPhotoIDs.filter { liveIDs.contains($0) }
+        self.closedEyePhotoIDs = self.closedEyePhotoIDs.filter { liveIDs.contains($0) }
+        self.partialClosedEyePhotoIDs = self.partialClosedEyePhotoIDs.filter { liveIDs.contains($0) }
         let cached = self.blurScores
-        let toCompute = photos.filter { cached[$0.id] == nil }
-        guard !toCompute.isEmpty else { return }
+        // 磁盘持久化复用：mtime 未变且已含闭眼分析(eyeState)的直接取已存的 blur 分，
+        // 跳过取图+Vision+拉普拉斯+EAR；缺 eyeState 的旧条目重算补齐。
+        let persisted = PhotoAnalysisStore.load()
+        let mtimeOf: [String: Double] = Dictionary(
+            photos.compactMap { p in p.modificationDate.map { (p.id, $0.timeIntervalSince1970) } },
+            uniquingKeysWith: { a, _ in a }
+        )
+        var toCompute: [PhotoItem] = []
+        var reusedFromDisk: [(String, FaceBlurScore)] = []
+        for photo in photos where cached[photo.id] == nil {
+            if let entry = persisted[photo.id],
+               let m = mtimeOf[photo.id],
+               abs(m - entry.mtime) < 1.0,
+               let bl = entry.blur, bl.eyeState != nil {
+                reusedFromDisk.append((photo.id, bl))
+            } else {
+                toCompute.append(photo)
+            }
+        }
         let token = blurDetectToken
+        // 复用的立即落库（瞬时，不开 spinner）
+        if !reusedFromDisk.isEmpty {
+            self.mergeBlurryBatch(reusedFromDisk, token: token)
+        }
+        // 始终按当前阈值重算一次红/黄标记：blurScores 可能已被预计算填满而
+        // blurryPhotoIDs 为空（筛选刚从关->开时上方清空了集合，但缓存命中走早返回
+        // 不再分类），否则开关一开要等用户动一下阈值才出标记。
+        self.applyBlurryScores()
+        self.dbg("[BLUR] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
+        guard !toCompute.isEmpty else {
+            self.persistBlurScores(persisted: persisted, mtimeOf: mtimeOf)  // 全命中：存盘即返回
+            return
+        }
         blurDetectInFlight += 1
         isBlurDetecting = true
-        #if DEBUG
-        dbg("[BLUR] start toCompute=\(toCompute.count) token=\(token) src=\(toCompute.first?.sourceKind ?? .folder)")
-        #endif
         Task.detached(priority: .userInitiated) { [weak self] in
-            await withTaskGroup(of: (String, FaceBlurScore?).self) { group in
-                for photo in toCompute {
-                    group.addTask { [weak self] in
-                        #if DEBUG
-                        self?.dbg("[BLUR] + \(photo.name)")
-                        #endif
-                        let img = await ThumbnailCacheService.shared.thumbnail(for: photo, maxPixel: 128)
-                        #if DEBUG
-                        self?.dbg("[BLUR] thumb \(photo.name) ok=\(img != nil)")
-                        #endif
-                        let s = img.flatMap { BlurDetectionService.blurScore(of: $0) }
-                        #if DEBUG
-                        self?.dbg("[BLUR] score \(photo.name) ok=\(s != nil)")
-                        #endif
-                        return (photo.id, s)
-                    }
+            // 单张检测任务体（提取为闭包，预填充与补充两处复用）
+            let child: @Sendable (PhotoItem) async -> (String, FaceBlurScore?) = { photo in
+                // 512px：128px 缩略图里小脸只有十几像素，放大到 128×128 算拉普拉斯必然是软糊团
+                // => 广角/远距人像被误判模糊。512px 给小脸 4 倍真实细节。
+                let img = await ThumbnailCacheService.shared.thumbnail(for: photo, maxPixel: 512)
+                // blurScore 走 off-pool async：Vision perform 同步阻塞，fan-out 会压垮协作池
+                let s: FaceBlurScore?
+                if let img {
+                    s = await BlurDetectionService.blurScoreAsync(of: img)
+                } else {
+                    s = nil
                 }
+                return (photo.id, s)
+            }
+            await withTaskGroup(of: (String, FaceBlurScore?).self) { group in
+                // 限制在途并发：一次性提交数千个子任务会把协作线程池压垮（每个又 spawn
+                // Task.detached 取图），导致调度停滞、进度死锁卡在 0。维持最多 maxInflight
+                // 个在途，每完成一个补一个。
+                let maxInflight = 16
+                var iter = toCompute.makeIterator()
                 // 流式收集：攒满 16 张就回主线程落库 + 刷新标记，用户早看到结果
                 var batch: [(String, FaceBlurScore)] = []
+                for _ in 0..<Swift.min(maxInflight, toCompute.count) {
+                    guard let photo = iter.next() else { break }
+                    group.addTask { await child(photo) }
+                }
                 for await (id, s) in group {
                     if let s { batch.append((id, s)) }
                     if batch.count >= 16 {
                         let b = batch; batch = []
                         await MainActor.run { self?.mergeBlurryBatch(b, token: token) }
+                    }
+                    if let photo = iter.next() {
+                        group.addTask { await child(photo) }
                     }
                 }
                 if !batch.isEmpty {
@@ -971,7 +1268,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                 }
             }
             // 任务结束：递减在途计数，归零才关进度。token 不匹配（已切文件夹）也照常递减，
-            // 保证计数不会因切文件夹而卡住。
+            // 保证计数不会因切文件夹而卡住。最后把 blur 分存盘（保留 dHash 字段）。
             await MainActor.run {
                 guard let self else { return }
                 self.blurDetectInFlight -= 1
@@ -979,31 +1276,37 @@ final class PhotoLibraryViewModel: ObservableObject {
                     self.blurDetectInFlight = 0
                     self.isBlurDetecting = false
                 }
-                #if DEBUG
-                self.dbg("[BLUR] done inFlight=\(self.blurDetectInFlight)")
-                #endif
+                self.persistBlurScores(persisted: persisted, mtimeOf: mtimeOf)
             }
         }
     }
 
-    /// 一批检测结果落库：只增量更新这批 id 的红/黄标记。
-    /// 非“只显示模糊”模式下不重建列表（cell overlay 依赖 @Published 集合自动刷新），
-    /// 仅在 showsBlurOnly 时才 rebuildDisplayedPhotos 做过滤。
-    private func mergeBlurryBatch(_ batch: [(String, FaceBlurScore)], token: Int) {
-        guard token == blurDetectToken else {
-            #if DEBUG
-            dbg("[BLUR] merge DROPPED token=\(token) cur=\(blurDetectToken) batch=\(batch.count)")
-            #endif
-            return
+    /// 把内存里的 blurScores 合并进磁盘分析缓存（保留已存的 dHash 字段，互不覆盖）。
+    private func persistBlurScores(
+        persisted: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)],
+        mtimeOf: [String: Double]
+    ) {
+        var merged = persisted
+        for (id, score) in self.blurScores {
+            let existing = merged[id]
+            merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,
+                         dHash: existing?.dHash,
+                         blur: score)
         }
+        PhotoAnalysisStore.save(merged)
+    }
+
+    /// 一批检测结果落库：只增量更新这批 id 的红/黄标记（模糊 + 闭眼）。
+    /// 非“只显示”模式下不重建列表（cell overlay 依赖 @Published 集合自动刷新），
+    /// 仅在 showsBlurOnly / showsEyeClosedOnly 时才 rebuildDisplayedPhotos 做过滤。
+    private func mergeBlurryBatch(_ batch: [(String, FaceBlurScore)], token: Int) {
+        guard token == blurDetectToken else { return }
         for (id, s) in batch {
             blurScores[id] = s
             classifyBlurry(id, s)
+            classifyEyeClosed(id, s)
         }
-        if showsBlurOnly { rebuildDisplayedPhotos() }
-        #if DEBUG
-        dbg("[BLUR] merge batch=\(batch.count) scores=\(blurScores.count)")
-        #endif
+        if showsBlurOnly || showsEyeClosedOnly { rebuildDisplayedPhotos() }
     }
 
     /// 按当前阈值把单张分数归入红/黄集合（增量：先移除再按规则重插）
@@ -1018,30 +1321,56 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
     }
 
-    /// 阈值变化时：用已缓存分数即时重新分类（不重取图，Stepper 流畅）
+    /// 按当前 EAR 阈值把单张归入闭眼红/黄集合（增量：先移除再按规则重插）。
+    /// - 无眼 landmark 人脸（faceCountWithEyes == 0）-> 不标
+    /// - maxEAR < threshold -> 所有人脸都闭眼 -> 红
+    /// - maxEAR >= threshold 且 minEAR < threshold -> 有睁有闭 -> 黄
+    /// - minEAR >= threshold -> 全睁 -> 不标
+    private func classifyEyeClosed(_ id: String, _ s: FaceBlurScore) {
+        closedEyePhotoIDs.remove(id)
+        partialClosedEyePhotoIDs.remove(id)
+        guard let eye = s.eyeState, eye.faceCountWithEyes > 0 else { return }
+        if eye.maxEAR < eyeClosedThreshold {
+            closedEyePhotoIDs.insert(id)
+        } else if eye.minEAR < eyeClosedThreshold {
+            partialClosedEyePhotoIDs.insert(id)
+        }
+    }
+
+    /// 阈值变化时：用已缓存分数即时重新分类（模糊 + 闭眼，不重取图，Stepper 流畅）
     private func regroupBlurry() {
         guard showsBlurFilter else { return }
         applyBlurryScores()
     }
 
-    /// 按阈值把缓存分数分类为红/黄集合：
-    /// - 无人脸（faceCount == 0）-> 不标
-    /// - maxScore < threshold -> 所有人脸都模糊 -> 红
-    /// - maxScore >= threshold 且 minScore < threshold -> 有清晰也有模糊 -> 黄
-    /// - 全清晰 -> 不标
+    /// 按阈值把缓存分数分类为红/黄集合（模糊 + 闭眼一次扫一遍，末尾统一 rebuild）：
+    /// 模糊 - 无人脸不标；maxScore<thr 全模糊红；minScore<thr 部分模糊黄。
+    /// 闭眼 - 无眼人脸不标；maxEAR<thr 全闭红；minEAR<thr 有睁有闭黄。
     private func applyBlurryScores() {
         var red: Set<String> = []
         var yellow: Set<String> = []
+        var eyeRed: Set<String> = []
+        var eyeYellow: Set<String> = []
         for (id, s) in blurScores {
-            guard s.faceCount > 0 else { continue }
-            if s.maxScore < blurThreshold {
-                red.insert(id)
-            } else if s.minScore < blurThreshold {
-                yellow.insert(id)
+            if s.faceCount > 0 {
+                if s.maxScore < blurThreshold {
+                    red.insert(id)
+                } else if s.minScore < blurThreshold {
+                    yellow.insert(id)
+                }
+            }
+            if let eye = s.eyeState, eye.faceCountWithEyes > 0 {
+                if eye.maxEAR < eyeClosedThreshold {
+                    eyeRed.insert(id)
+                } else if eye.minEAR < eyeClosedThreshold {
+                    eyeYellow.insert(id)
+                }
             }
         }
         blurryPhotoIDs = red
         partialBlurryPhotoIDs = yellow
+        closedEyePhotoIDs = eyeRed
+        partialClosedEyePhotoIDs = eyeYellow
         rebuildDisplayedPhotos()
     }
 
