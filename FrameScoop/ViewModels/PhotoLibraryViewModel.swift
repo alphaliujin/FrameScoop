@@ -116,8 +116,11 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 连拍筛选：开启后按画面相似（dHash）识别连拍并分段显示
     @Published var showsBurstFilter: Bool = false {
         didSet {
-            // 与人脸清晰度筛选互斥：开连拍时关掉人脸筛选（置 false 不会反向触发本 didSet）
-            if showsBurstFilter { showsBlurFilter = false }
+            // 与人脸筛选互斥：开连拍时关掉人脸筛选 + 闭眼检测（置 false 不会反向触发本 didSet）
+            if showsBurstFilter {
+                showsBlurFilter = false
+                showsEyeClosedFilter = false
+            }
             detectBurstsIfNeeded()
         }
     }
@@ -132,14 +135,24 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 是否正在识别连拍（后台取图算哈希中）
     @Published private(set) var isBurstDetecting: Bool = false
 
-    /// 人脸筛选（模糊 + 闭眼，一次 Vision）：开启后检测人脸 landmark，同时判断人脸模糊与闭眼。
+    /// 人脸筛选（模糊，一次 Vision）：开启后检测人脸 landmark，同时判断人脸模糊与闭眼。
     @Published var showsBlurFilter: Bool = false {
         didSet {
             // 与连拍筛选互斥：开人脸筛选时关掉连拍（置 false 不会反向触发本 didSet）
             if showsBlurFilter { showsBurstFilter = false }
-            // 关闭时复位「只显示」开关：避免它们残留为 true 时 rebuildDisplayedPhotos 用空集合
+            // 关闭时复位「只显示模糊」：避免残留为 true 时 rebuildDisplayedPhotos 用空集合
             // 把网格滤空（如切到连拍筛选时 base 变成连拍段但仍按空模糊集过滤）
-            else { showsBlurOnly = false; showsEyeClosedOnly = false }
+            else { showsBlurOnly = false }
+            detectBlurryIfNeeded()
+        }
+    }
+    /// 闭眼检测（与人脸筛选共享同一次 Vision 预计算，可与人脸筛选同时开启；与连拍互斥）。
+    /// 数据来自 blurScores 中的 eyeState（precompute/detect 时一并算出），开关只控制 UI 与过滤。
+    @Published var showsEyeClosedFilter: Bool = false {
+        didSet {
+            // 与连拍筛选互斥（与人脸筛选可共存，共享同一次 Vision）
+            if showsEyeClosedFilter { showsBurstFilter = false }
+            else { showsEyeClosedOnly = false }
             detectBlurryIfNeeded()
         }
     }
@@ -938,7 +951,7 @@ final class PhotoLibraryViewModel: ObservableObject {
 
         // 反映到视图：筛选在显示则按（已复用的）缓存重排，否则普通重排
         if showsBurstFilter { regroupBursts() }
-        else if showsBlurFilter { regroupBlurry() }
+        else if showsBlurFilter || showsEyeClosedFilter { regroupBlurry() }
         else { rebuildDisplayedPhotos() }
 
         guard !toCompute.isEmpty else { return }
@@ -1013,7 +1026,7 @@ final class PhotoLibraryViewModel: ObservableObject {
         for (id, s) in blurs { blurScores[id] = s; classifyBlurry(id, s); classifyEyeClosed(id, s) }
         precomputeDone += doneDelta
         if showsBurstFilter { regroupBursts() }
-        else if showsBlurFilter { regroupBlurry() }
+        else if showsBlurFilter || showsEyeClosedFilter { regroupBlurry() }
         // 周期性存盘：每 128 张落一次，中断也不至于全丢
         if precomputeDone - precomputeSavedCheckpoint >= 128 {
             precomputeSavedCheckpoint = precomputeDone
@@ -1167,7 +1180,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 优化点：缩略图降到 128px、优先级提到 .userInitiated、每 16 张增量刷新一次（不必等全部算完）。
     /// 注意：本方法不递增 token——同文件夹 reload 不取消在途检测；切换文件夹由 loadContent 递增。
     private func detectBlurryIfNeeded() {
-        guard showsBlurFilter else {
+        guard showsBlurFilter || showsEyeClosedFilter else {
             blurryPhotoIDs = []
             partialBlurryPhotoIDs = []
             closedEyePhotoIDs = []
@@ -1339,7 +1352,7 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     /// 阈值变化时：用已缓存分数即时重新分类（模糊 + 闭眼，不重取图，Stepper 流畅）
     private func regroupBlurry() {
-        guard showsBlurFilter else { return }
+        guard showsBlurFilter || showsEyeClosedFilter else { return }
         applyBlurryScores()
     }
 

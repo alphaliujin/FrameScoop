@@ -82,6 +82,8 @@ struct PhotoGridView: View {
         let number = library.burstPhotoNumbers[photo.id]
         let isRedBlurry = library.blurryPhotoIDs.contains(photo.id)
         let isYellowBlurry = library.partialBlurryPhotoIDs.contains(photo.id)
+        let isRedEye = library.closedEyePhotoIDs.contains(photo.id)
+        let isYellowEye = library.partialClosedEyePhotoIDs.contains(photo.id)
         return AnyView(
             PhotoThumbnailCell(photo: photo, isSelected: isSelected)
                 .frame(width: width, height: cellSize)
@@ -114,6 +116,18 @@ struct PhotoGridView: View {
                         }
                         .padding(2)
                         .allowsHitTesting(false)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    // 右上角徽标：闭眼（eye.slash）。红 = 所有人脸都闭眼；黄 = 有睁有闭
+                    if isRedEye || isYellowEye {
+                        Image(systemName: "eye.slash.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(isRedEye ? Color.white : Color.black)
+                            .frame(width: 14, height: 14)
+                            .background(isRedEye ? Color.red : Color.yellow, in: Circle())
+                            .padding(2)
+                            .allowsHitTesting(false)
                     }
                 }
                 .contentShape(Rectangle())

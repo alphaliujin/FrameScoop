@@ -25,6 +25,10 @@ struct FilterSidebarView: View {
                 Section("智能筛选") {
                     Toggle("连拍筛选", isOn: $library.showsBurstFilter)
                         .help("按画面相似（dHash）识别连拍，并分段显示")
+                    Toggle("人脸筛选", isOn: $library.showsBlurFilter)
+                        .help("一次 Vision 检测人脸，按拉普拉斯方差判断人脸模糊；左上角标红/黄感叹号")
+                    Toggle("闭眼检测", isOn: $library.showsEyeClosedFilter)
+                        .help("与人脸筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；右上角标红/黄 eye.slash")
                 }
 
                 if library.showsBurstFilter {
@@ -36,17 +40,10 @@ struct FilterSidebarView: View {
                     }
                 }
 
-                Section("人脸筛选") {
-                    Toggle("人脸筛选", isOn: $library.showsBlurFilter)
-                        .help("一次 Vision 同时判断人脸模糊与闭眼；左上角标徽章（红=全模糊/全闭眼，黄=部分）")
-                }
-
                 if library.showsBlurFilter {
                     Section {
                         Toggle("只显示人脸模糊照片", isOn: $library.showsBlurOnly)
                             .help("开启后隐藏无人脸或人脸清晰的照片，仅显示人脸模糊的照片")
-                        Toggle("只显示闭眼照片", isOn: $library.showsEyeClosedOnly)
-                            .help("开启后隐藏无人脸或睁眼的照片，仅显示闭眼照片；与「只显示模糊」同开取交集")
                     }
 
                     Section("人脸模糊判定") {
@@ -55,6 +52,13 @@ struct FilterSidebarView: View {
                                 in: 1...200,
                                 step: 1)
                             .help("人脸拉普拉斯方差低于此值视为该人脸模糊；越小越严格")
+                    }
+                }
+
+                if library.showsEyeClosedFilter {
+                    Section {
+                        Toggle("只显示闭眼照片", isOn: $library.showsEyeClosedOnly)
+                            .help("开启后隐藏无人脸或睁眼的照片，仅显示闭眼照片；与「只显示模糊」同开取交集")
                     }
 
                     Section("闭眼判定") {
