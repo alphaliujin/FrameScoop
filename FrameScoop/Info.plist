@@ -18,7 +18,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>AppIcon.icns</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleInfoDictionaryVersion</key>

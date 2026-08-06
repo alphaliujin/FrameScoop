@@ -7,9 +7,16 @@
 //  - 磁盘缓存：~/Library/Caches/FrameScoop/Thumbnails，避免重复解码
 //  - 生成：后台并发，使用 actor 去重防止对同一图片重复生成
 //
+//  性能优化：
+//  - 磁盘写入用 CGImageDestination 直接 CGImage -> JPEG，跳过 tiffRepresentation
+//    的未压缩 TIFF 中间缓冲（512px 图省 ~2MB 临时内存）和 NSBitmapImageRep 二次解码。
+//  - 磁盘清理（pruneDiskCache）按写入计数节流：每 50 次写入才扫描一次目录，
+//    避免每张缩略图落盘都触发 O(n log n) 全目录排序。
+//
 
 import Foundation
 import AppKit
+import ImageIO
 
 final class ThumbnailCacheService {
 
@@ -34,6 +41,11 @@ final class ThumbnailCacheService {
 
     /// 在途任务去重器（actor 保证并发安全，无需手动加锁）
     private let inFlight = InFlightTracker()
+
+    /// 磁盘清理节流计数器：每 pruneThreshold 次写入才触发一次 pruneDiskCache
+    private nonisolated(unsafe) static let pruneCounterQueue = DispatchQueue(label: "framescoop.prune-counter")
+    private nonisolated(unsafe) static var writesSincePrune = 0
+    private static let pruneThreshold = 50
 
     private init() {}
 
@@ -112,17 +124,37 @@ final class ThumbnailCacheService {
     }
 
     private func writeToDisk(image: NSImage, key: String, dir: URL) {
-        // 用 JPEG（质量 0.85）落盘：照片缩略图无需 alpha，体积约为 PNG 的 1/10，
-        // 显著减小磁盘占用、加快写入。带 alpha 的透明图会丢失透明（填黑），对照片浏览器可接受。
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
+        // 用 CGImageDestination 直接 CGImage -> JPEG，跳过 tiffRepresentation 的未压缩
+        // TIFF 中间缓冲 + NSBitmapImageRep 二次解码，减少 ~2x 内存和 CPU 开销。
+        // JPEG 质量 0.85，与之前 NSBitmapImageRep 的 compressionFactor 一致。
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let mutableData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            mutableData, "public.jpeg" as CFString, 1, nil
+        ) else { return }
+        CGImageDestinationAddImage(
+            dest, cg,
+            [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(dest) else { return }
+        let data = mutableData as Data
         let file = diskFileURL(key: key, dir: dir)
         try? data.write(to: file, options: .atomic)
-        // 写入后异步裁剪磁盘缓存上限：切换缩略图尺寸会产生新 key 的文件，
+        // 写入后按计数节流裁剪磁盘缓存上限：切换缩略图尺寸会产生新 key 的文件，
         // 旧尺寸文件不再命中，需按数量上限回收，避免缓存目录无限膨胀。
-        Task.detached(priority: .background) { [dir] in
-            Self.pruneDiskCache(dir: dir, maxFiles: 2000)
+        // 每 pruneThreshold 次写入才扫描一次目录，避免每次落盘都做 O(n log n) 排序。
+        var shouldPrune = false
+        Self.pruneCounterQueue.sync {
+            Self.writesSincePrune += 1
+            if Self.writesSincePrune >= Self.pruneThreshold {
+                Self.writesSincePrune = 0
+                shouldPrune = true
+            }
+        }
+        if shouldPrune {
+            Task.detached(priority: .background) { [dir] in
+                Self.pruneDiskCache(dir: dir, maxFiles: 2000)
+            }
         }
     }
 

@@ -61,6 +61,12 @@ final class PhotoLibraryViewModel: ObservableObject {
             // 仅当照片集合（id）实际变化时才重启预计算；同一文件夹的 reload（文件监控、
             // iCloud 同步触动的元数据/属性变化等若内容不变）不打断在途预计算，
             // 否则进度会被反复顶掉 token 而永远卡在「图片数据导入：0/xxx」。
+            // 快速预检：数量不同则内容必然变化，跳过昂贵的 Set 构建与比较
+            // （文件夹切换 / 清空 / 增删照片时 count 几乎总是不同，避免 O(n) Set 构建）
+            guard oldValue.count == photos.count else {
+                precomputeAnalysis()
+                return
+            }
             let changed = Set(oldValue.map(\.id)) != Set(photos.map(\.id))
             if changed {
                 // 切到不同照片集合：自动预计算连拍 dHash + 人脸模糊分（侧栏「图片数据导入」进度）。
@@ -1169,8 +1175,10 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     // MARK: - 模糊识别
 
-    /// photoID -> 人脸模糊判定结果缓存（阈值变化时复用，避免重取图）
-    @Published private var blurScores: [String: FaceBlurScore] = [:]
+    /// photoID -> 人脸模糊判定结果缓存（阈值变化时复用，避免重取图）。
+    /// 不加 @Published：视图直接观察的是 blurryPhotoIDs 等分类集合（独立 @Published），
+    /// blurScores 本身每 16 张批量更新一次，@Published 会触发多余的 objectWillChange。
+    private var blurScores: [String: FaceBlurScore] = [:]
     /// 已识别的照片数量（含无人脸的；每批落库时随 blurScores 变化，供边栏进度显示）
     var blurRecognizedCount: Int { blurScores.count }
     /// 仅在切换文件夹（源）时递增：取消旧文件夹的在途检测，避免其结果污染新文件夹。
@@ -1237,7 +1245,7 @@ final class PhotoLibraryViewModel: ObservableObject {
         self.applyBlurryScores()
         self.dbg("[BLUR] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
         guard !toCompute.isEmpty else {
-            self.persistBlurScores(persisted: persisted, mtimeOf: mtimeOf)  // 全命中：存盘即返回
+            self.persistBlurScores(mtimeOf: mtimeOf)  // 全命中：存盘即返回
             return
         }
         blurDetectInFlight += 1
@@ -1293,17 +1301,16 @@ final class PhotoLibraryViewModel: ObservableObject {
                     self.blurDetectInFlight = 0
                     self.isBlurDetecting = false
                 }
-                self.persistBlurScores(persisted: persisted, mtimeOf: mtimeOf)
+                self.persistBlurScores(mtimeOf: mtimeOf)
             }
         }
     }
 
     /// 把内存里的 blurScores 合并进磁盘分析缓存（保留已存的 dHash 字段，互不覆盖）。
-    private func persistBlurScores(
-        persisted: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)],
-        mtimeOf: [String: Double]
-    ) {
-        var merged = persisted
+    /// 从缓存重新读取最新数据（而非 detectBlurpyIfNeeded 启动时的快照），
+    /// 避免预计算期间其他 save() 写入的 dHash 条目被陈旧快照覆盖丢失。
+    private func persistBlurScores(mtimeOf: [String: Double]) {
+        var merged = PhotoAnalysisStore.load()
         for (id, score) in self.blurScores {
             let existing = merged[id]
             merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,

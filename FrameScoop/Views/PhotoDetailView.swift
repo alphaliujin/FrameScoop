@@ -28,40 +28,45 @@ struct PhotoDetailView: View {
 
     var body: some View {
         ZStack {
-            // 毛玻璃 + 暗色背景
+            // 毛玻璃 + 暗色背景（全屏铺底，含胶片条区域）
             Color.black.opacity(0.96)
                 .background(.ultraThinMaterial)
+                .ignoresSafeArea()
 
-            GeometryReader { geo in
+            // 主内容区：图片在上，胶片条在下，互不叠加
+            VStack(spacing: 0) {
+                // 图片区 + 浮层控件
                 ZStack {
-                    if let image {
-                        imageView(image, in: geo)
-                    } else {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: geo.size.width, height: geo.size.height)
+                    GeometryReader { geo in
+                        ZStack {
+                            if let image {
+                                imageView(image, in: geo)
+                            } else {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                            }
+                        }
+                    }
+
+                    // 顶部控制栏
+                    topBar
+                        .frame(maxHeight: .infinity, alignment: .top)
+
+                    // 左右导航按钮
+                    navigationArrows
+
+                    // 信息面板（可切换）
+                    if library.showsInfoPanel, let metadata {
+                        MetadataPanelView(photo: photo, metadata: metadata)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
+
+                // 底部胶片条：独立区域，不再叠加在图片上
+                filmstrip
             }
-            .ignoresSafeArea()
-
-            // 顶部控制栏
-            topBar
-                .frame(maxHeight: .infinity, alignment: .top)
-
-            // 左右导航按钮
-            navigationArrows
-
-            // 信息面板（可切换）
-            if library.showsInfoPanel, let metadata {
-                MetadataPanelView(photo: photo, metadata: metadata)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-
-            // 底部胶片条
-            filmstrip
-                .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .task(id: photo.id) {
             await loadImageAndMetadata()

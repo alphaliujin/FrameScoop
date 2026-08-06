@@ -48,12 +48,10 @@ targets:
         # 代码改动重签后 TCC（照片库等）授权保持有效，Xcode 调试稳定
         CODE_SIGN_IDENTITY: "FrameScoop Dev"
         CODE_SIGN_STYLE: Manual
-        # App 图标通过 FrameScoop/Resources/AppIcon.icns 打包，由 CFBundleIconFile 引用
-        # （跨 SDK 稳定，避免 asset catalog 单尺寸图标兼容问题）
-        # 显式置空 ASSETCATALOG_COMPILER_APPICON_NAME：xcodegen 默认会注入 "AppIcon"，
-        # 但 Assets.xcassets 中并无 AppIcon.appiconset，残留设置会与 .icns 方案冲突，
-        # 导致 Launch Services 可能找不到图标而显示系统默认图标。
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # App 图标通过 FrameScoop/Resources/AppIcon.icns 打包，由 CFBundleIconFile + CFBundleIconName 引用。
+        # Info.plist 同时声明 CFBundleIconFile 和 CFBundleIconName（macOS 26 要求两者皆有，
+        # 缺 CFBundleIconName 时系统回退为通用图标）。Assets.xcassets 中无 AppIcon.appiconset，
+        # 故 ASSETCATALOG_COMPILER_APPICON_NAME 不会在 Assets.car 中生成图标，不影响 .icns 方案。
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES

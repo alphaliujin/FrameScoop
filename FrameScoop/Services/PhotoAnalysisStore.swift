@@ -10,6 +10,11 @@
 //  dHash 以 16 进制字符串存储（UInt64 超 JSON 安全整数 2^53，直接编码会丢精度）。
 //  按照片 mtime 失效：文件改动则 mtime 变，该张重算；其余复用。
 //
+//  性能优化：内存缓存。预计算期间 persistPrecompute() 每 128 张调一次 save()，
+//  save() 内部先 load() 再合并——若不缓存则每次都做完整磁盘 I/O + JSON 解码。
+//  缓存在 load() 时填充、save() 时更新，与磁盘始终保持一致。
+//  所有 load/save 均在 @MainActor 调用，NSLock 仅做防御性线程安全保护。
+//
 
 import Foundation
 
@@ -37,21 +42,45 @@ enum PhotoAnalysisStore {
             .appendingPathComponent("burst-hashes.json")
     }()
 
+    // MARK: - 内存缓存
+
+    /// 内存缓存：避免预计算期间反复从磁盘读取整个 JSON。所有 load/save 均在 @MainActor 调用。
+    private nonisolated(unsafe) static let cacheLock = NSLock()
+    private nonisolated(unsafe) static var memoryCache: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)]?
+
     /// 读全部条目：photoID -> (mtime, dHash?, blur?)。读失败返回空（按未命中处理，重算）。
+    /// 优先返回内存缓存；缓存未初始化时从磁盘读取并缓存。
     static func load() -> [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)] {
+        cacheLock.lock()
+        if let cached = memoryCache {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
         let useURL = FileManager.default.fileExists(atPath: url.path) ? url : legacyURL
         guard let data = try? Data(contentsOf: useURL),
-              let store = try? JSONDecoder().decode(Store.self, from: data) else { return [:] }
+              let store = try? JSONDecoder().decode(Store.self, from: data) else {
+            // 磁盘读失败也缓存空字典，避免反复尝试读不存在的文件
+            cacheLock.lock()
+            memoryCache = [:]
+            cacheLock.unlock()
+            return [:]
+        }
         var out: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)] = [:]
         out.reserveCapacity(store.entries.count)
         for (id, e) in store.entries {
             let dh = e.dHash.flatMap { UInt64($0, radix: 16) }
             out[id] = (e.mtime, dh, e.blur)
         }
+        cacheLock.lock()
+        memoryCache = out
+        cacheLock.unlock()
         return out
     }
 
     /// 整表写入（始终写新文件名 photo-analysis.json；调用方负责合并好）。
+    /// 写入后同步更新内存缓存，后续 load() 直接命中缓存。
     static func save(_ entries: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)]) {
         var enc: [String: Entry] = [:]
         enc.reserveCapacity(entries.count)
@@ -63,5 +92,9 @@ enum PhotoAnalysisStore {
         let store = Store(version: version, entries: enc)
         guard let data = try? JSONEncoder().encode(store) else { return }
         try? data.write(to: url, options: .atomic)
+
+        cacheLock.lock()
+        memoryCache = entries
+        cacheLock.unlock()
     }
 }
