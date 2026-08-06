@@ -5,7 +5,7 @@
 //  右侧「智能筛选」边栏。
 //  通过 ContentView 的 .inspector 呈现，可由工具栏按钮折叠/展开。
 //  连拍筛选 -- 按拍摄时间排序后相邻 + 画面相似（dHash）识别连拍并分段显示。
-//  人脸模糊筛选 -- 检测人脸并判断是否模糊（任一清晰人脸即不算模糊），左上角标红感叹号。
+//  人脸模糊筛选 -- 检测人脸并判断是否模糊（任一清晰人脸即不算模糊），左上角标红 face.dashed。
 //
 
 import SwiftUI
@@ -26,9 +26,9 @@ struct FilterSidebarView: View {
                     Toggle("连拍筛选", isOn: $library.showsBurstFilter)
                         .help("按画面相似（dHash）识别连拍，并分段显示")
                     Toggle("人脸筛选", isOn: $library.showsBlurFilter)
-                        .help("一次 Vision 检测人脸，按拉普拉斯方差判断人脸模糊；左上角标红/黄感叹号")
+                        .help("一次 Vision 检测人脸，按拉普拉斯方差判断人脸模糊；左上角标红/黄 face.dashed")
                     Toggle("闭眼检测", isOn: $library.showsEyeClosedFilter)
-                        .help("与人脸筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；右上角标红/黄 eye.slash")
+                        .help("与人脸筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；左上角标红/黄 eye.slash")
                 }
 
                 if library.showsBurstFilter {

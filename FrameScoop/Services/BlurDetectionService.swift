@@ -11,8 +11,8 @@
 //  ViewModel 按以下规则标色（threshold = blurThreshold / eyeClosedThreshold）：
 //  模糊：
 //  - 无人脸（faceCount == 0）-> 不标
-//  - maxScore < threshold -> 所有人脸都模糊 -> 红色感叹号
-//  - maxScore >= threshold 且 minScore < threshold -> 有清晰也有模糊 -> 黄色感叹号
+//  - maxScore < threshold -> 所有人脸都模糊 -> 红色 face.dashed
+//  - maxScore >= threshold 且 minScore < threshold -> 有清晰也有模糊 -> 黄色 face.dashed
 //  - maxScore >= threshold 且 minScore >= threshold -> 全清晰 -> 不标
 //  闭眼：
 //  - 无眼 landmark 人脸（faceCountWithEyes == 0）-> 不标
@@ -135,9 +135,16 @@ struct BlurDetectionService {
     /// 异步 off-pool 版本：Vision perform / CGContext draw 是同步阻塞调用，若在协作线程池
     /// 上并发 fan-out（人脸模糊检测一次数百张），会占满协作池线程导致死锁、score 永不返回。
     /// 挪到 GCD 线程执行，协作池保持空闲承接 await 续体。结果与同步版完全一致。
+    ///
+    /// QoS 用 .utility 而非 .userInitiated：VNImageRequestHandler.perform 是同步阻塞调用，
+    /// 内部由 Vision 的无 QoS（base priority 0）工作线程完成推理，调用线程会在其上阻塞等待。
+    /// 若调用线程为 .userInitiated，即高优先级线程等待低/无优先级线程 -> QoS 优先级反转
+    /// （运行时告警 "User-initiated QoS waiting on a thread without a QoS class"）。
+    /// .utility 是后台图片索引的语义正确 QoS（用户可见进度但非前台阻塞），且不高于 Vision
+    /// 内部线程优先级，避免反转告警；协作池仍因 continuation 挂起而不被阻塞。
     static func blurScoreAsync(of image: NSImage) async -> FaceBlurScore? {
         await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 cont.resume(returning: blurScore(of: image))
             }
         }

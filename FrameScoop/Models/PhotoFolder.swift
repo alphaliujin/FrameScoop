@@ -24,23 +24,13 @@ struct PhotoFolder: Identifiable, Hashable, Codable {
     /// 安全作用域书签数据，用于跨会话恢复访问权限
     var bookmarkData: Data
 
-    /// 添加时间
-    var dateAdded: Date
-
-    /// 该文件夹中包含的图片数量（加载后由视图模型回填）
-    var photoCount: Int
-
     init(id: UUID = UUID(),
          name: String,
          url: URL,
-         bookmarkData: Data,
-         dateAdded: Date = Date(),
-         photoCount: Int = 0) {
+         bookmarkData: Data) {
         self.id = id
         self.name = name
         self.url = url
         self.bookmarkData = bookmarkData
-        self.dateAdded = dateAdded
-        self.photoCount = photoCount
     }
 }

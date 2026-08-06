@@ -99,9 +99,4 @@ struct PhotoItem: Identifiable, Hashable, Codable, Sendable {
     var formattedSize: String {
         size > 0 ? ByteCountFormatter.string(fromByteCount: size, countStyle: .file) : "—"
     }
-
-    /// 排序/分组用的日期：优先修改时间，其次创建时间
-    var effectiveDate: Date {
-        modificationDate ?? creationDate ?? .distantPast
-    }
 }

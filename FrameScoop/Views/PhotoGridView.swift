@@ -79,56 +79,13 @@ struct PhotoGridView: View {
         let isSelected = library.selectedPhotoIDs.contains(photo.id)
         let cellSize = library.thumbnailSize.cellSize
         let width = max(cellSize * photo.aspectRatio, 40)
-        let number = library.burstPhotoNumbers[photo.id]
-        let isRedBlurry = library.blurryPhotoIDs.contains(photo.id)
-        let isYellowBlurry = library.partialBlurryPhotoIDs.contains(photo.id)
-        let isRedEye = library.closedEyePhotoIDs.contains(photo.id)
-        let isYellowEye = library.partialClosedEyePhotoIDs.contains(photo.id)
         return AnyView(
-            PhotoThumbnailCell(photo: photo, isSelected: isSelected)
+            PhotoThumbnailCell(photo: photo, isSelected: isSelected, thumbnailSize: library.thumbnailSize)
                 .frame(width: width, height: cellSize)
                 .overlay(alignment: .topLeading) {
-                    // 左上角徽标：连拍编号（黑底白数字）+ 人脸模糊感叹号
-                    // 红 = 所有人脸都模糊；黄 = 有清晰也有模糊
-                    if number != nil || isRedBlurry || isYellowBlurry {
-                        HStack(spacing: 2) {
-                            if let number {
-                                Text("\(number)")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 4))
-                            }
-                            if isRedBlurry {
-                                Image(systemName: "exclamationmark")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 14, height: 14)
-                                    .background(.red, in: Circle())
-                            } else if isYellowBlurry {
-                                Image(systemName: "exclamationmark")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.black)
-                                    .frame(width: 14, height: 14)
-                                    .background(.yellow, in: Circle())
-                            }
-                        }
+                    PhotoBadges(photo: photo)
                         .padding(2)
                         .allowsHitTesting(false)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    // 右上角徽标：闭眼（eye.slash）。红 = 所有人脸都闭眼；黄 = 有睁有闭
-                    if isRedEye || isYellowEye {
-                        Image(systemName: "eye.slash.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(isRedEye ? Color.white : Color.black)
-                            .frame(width: 14, height: 14)
-                            .background(isRedEye ? Color.red : Color.yellow, in: Circle())
-                            .padding(2)
-                            .allowsHitTesting(false)
-                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { openInDetail(photo) }
@@ -163,13 +120,13 @@ struct PhotoGridView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            // 智能筛选边栏切换
+            // 右边栏（智能筛选）显示/隐藏
             Button {
                 library.showsFilterPanel.toggle()
             } label: {
-                Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                Label("边栏", systemImage: "sidebar.right")
             }
-            .help("显示或隐藏智能筛选面板")
+            .help("显示或隐藏筛选边栏")
 
             // 排序菜单
             Menu {
@@ -219,6 +176,59 @@ struct PhotoGridView: View {
                 .help("发送选中的 \(library.selectedPhotoIDs.count) 张图片")
             }
         }
+    }
+}
+
+// MARK: - 图片徽标
+
+/// 图片徽标视图：连拍编号 + 人脸模糊 face.dashed + 闭眼 eye.slash，横向排列于左上角。
+/// 网格缩略图与详情页大图共用；各项按对应筛选开关门控（开关关闭则不显示该项）。
+/// 底层数据由预计算始终算好，与开关解耦。调用方负责定位、缩放与 allowsHitTesting。
+struct PhotoBadges: View {
+    let photo: PhotoItem
+    @EnvironmentObject private var library: PhotoLibraryViewModel
+
+    var body: some View {
+        let number = library.burstPhotoNumbers[photo.id]
+        let blurOn = library.showsBlurFilter
+        let isRedBlurry = blurOn && library.blurryPhotoIDs.contains(photo.id)
+        let isYellowBlurry = blurOn && library.partialBlurryPhotoIDs.contains(photo.id)
+        let eyeClosedOn = library.showsEyeClosedFilter
+        let isRedEye = eyeClosedOn && library.closedEyePhotoIDs.contains(photo.id)
+        let isYellowEye = eyeClosedOn && library.partialClosedEyePhotoIDs.contains(photo.id)
+
+        Group {
+            if number != nil || isRedBlurry || isYellowBlurry || isRedEye || isYellowEye {
+                HStack(spacing: 2) {
+                    if let number {
+                        Text("\(number)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    if isRedBlurry {
+                        badge(symbol: "face.dashed.fill", bg: .red, fg: .white)
+                    } else if isYellowBlurry {
+                        badge(symbol: "face.dashed.fill", bg: .yellow, fg: .black)
+                    }
+                    if isRedEye {
+                        badge(symbol: "eye.slash.fill", bg: .red, fg: .white)
+                    } else if isYellowEye {
+                        badge(symbol: "eye.slash.fill", bg: .yellow, fg: .black)
+                    }
+                }
+            }
+        }
+    }
+
+    private func badge(symbol: String, bg: Color, fg: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(fg)
+            .frame(width: 14, height: 14)
+            .background(bg, in: Circle())
     }
 }
 

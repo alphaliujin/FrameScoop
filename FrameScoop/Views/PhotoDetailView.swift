@@ -86,6 +86,15 @@ struct PhotoDetailView: View {
             .scaleEffect(scale)
             .offset(scale > 1 ? offset : .zero)
             .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(alignment: .topLeading) {
+                // 左上角徽标：与网格一致的连拍编号 / 模糊 / 闭眼标记；
+                // 下移避开顶部标题栏，固定不随图片缩放/平移移动
+                PhotoBadges(photo: photo)
+                    .scaleEffect(1.6, anchor: .topLeading)
+                    .padding(.top, 56)
+                    .padding(.leading, 12)
+                    .allowsHitTesting(false)
+            }
             .gesture(
                 // 缩放
                 MagnificationGesture()
@@ -130,6 +139,7 @@ struct PhotoDetailView: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .padding(.top, 30)
             Spacer()
             Button {
                 withAnimation { library.showsInfoPanel.toggle() }

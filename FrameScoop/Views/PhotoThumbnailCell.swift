@@ -11,8 +11,8 @@ import AppKit
 struct PhotoThumbnailCell: View {
     let photo: PhotoItem
     let isSelected: Bool
+    let thumbnailSize: ThumbnailSize
 
-    @EnvironmentObject var library: PhotoLibraryViewModel
     @State private var thumbnail: NSImage?
     @State private var loadFailed = false
     @State private var isHovering = false
@@ -57,14 +57,14 @@ struct PhotoThumbnailCell: View {
                 .fill(Color.white.opacity(isHovering ? 0.08 : 0))
         )
         .onHover { isHovering = $0 }
-        .task(id: "\(photo.id)-\(library.thumbnailSize)") {
+        .task(id: "\(photo.id)-\(thumbnailSize)") {
             await loadThumbnail()
         }
     }
 
     /// 加载缩略图（命中缓存则即时）
     private func loadThumbnail() async {
-        let maxPixel = library.thumbnailSize.maxPixel
+        let maxPixel = thumbnailSize.maxPixel
         // 尺寸变更时清空旧图，避免拉伸
         thumbnail = nil
         loadFailed = false

@@ -164,9 +164,9 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var showsBlurOnly: Bool = false {
         didSet { rebuildDisplayedPhotos() }
     }
-    /// 人脸全模糊照片 id 集合（所有人脸都模糊）-> 标红感叹号
+    /// 人脸全模糊照片 id 集合（所有人脸都模糊）-> 标红 face.dashed
     @Published private(set) var blurryPhotoIDs: Set<String> = []
-    /// 人脸部分模糊照片 id 集合（有清晰也有模糊人脸）-> 标黄感叹号
+    /// 人脸部分模糊照片 id 集合（有清晰也有模糊人脸）-> 标黄 face.dashed
     @Published private(set) var partialBlurryPhotoIDs: Set<String> = []
     /// 是否正在识别人脸模糊（后台检测人脸 + 算 FFT）
     @Published private(set) var isBlurDetecting: Bool = false
@@ -255,7 +255,9 @@ final class PhotoLibraryViewModel: ObservableObject {
     }
 
     /// 延后执行的初始化：读取设置与根文件夹，激活安全作用域并构建树。
-    /// 选中动作仅修改 selectedNodeID；实际图片加载由视图的 onChange 触发 loadContent。
+    /// 选中首项后直接调用 loadContent 加载内容，不依赖视图的 onChange 触发--
+    /// onChange 在启动时可能因时序问题未触发（selectedNodeID 与 folderTree 同批设置时，
+    /// 视图层级可能尚未就绪），导致 loadContent 不被调用、侧边栏 selection 也不同步。
     @MainActor
     private func setUp() {
         loadSettings()
@@ -270,6 +272,8 @@ final class PhotoLibraryViewModel: ObservableObject {
                 self.selectedNodeID = self.folderTree.first(where: { !$0.isPhotosLibrary })?.id
                     ?? self.folderTree.first?.id
             }
+            // 直接加载选中节点内容；若 onChange 也触发会走 loadToken 去重，不会重复加载
+            self.loadContent(for: self.selectedNodeID)
         }
     }
 

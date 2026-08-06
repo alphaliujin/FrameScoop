@@ -24,8 +24,6 @@ struct ImageMetadata: Hashable {
     var isoSpeed: Int?                 // ISO
     var exposureTime: String?           // 快门速度（文本，如 "1/250 s"）
     var takenDate: String?             // 拍摄时间（原始字符串）
-    var gpsLatitude: Double?
-    var gpsLongitude: Double?
 
     /// 是否含任何拍摄设备信息
     var hasCameraInfo: Bool {

@@ -56,6 +56,7 @@ FrameScoop/
 │   ├── Models/                    # 数据模型层（纯值类型）
 │   │   ├── PhotoItem.swift                # 单张图片
 │   │   ├── PhotoFolder.swift              # 图片文件夹 + 书签
+│   │   ├── FolderNode.swift               # 文件夹树节点（侧边栏展开）
 │   │   ├── SortOption.swift               # 排序/方向/缩略图尺寸枚举
 │   │   └── ImageMetadata.swift            # 富元数据
 │   ├── ViewModels/
@@ -67,22 +68,30 @@ FrameScoop/
 │   │   ├── PhotoThumbnailCell.swift       # 单格缩略图（异步加载）
 │   │   ├── PhotoDetailView.swift          # 沉浸式查看（缩放/导航/胶片条）
 │   │   ├── MetadataPanelView.swift        # 元数据信息面板
+│   │   ├── FilterSidebarView.swift        # 右侧智能筛选边栏
 │   │   ├── EmptyStateView.swift           # 空状态占位
 │   │   └── SettingsView.swift            # 偏好设置窗口
 │   ├── Services/                  # 服务层
 │   │   ├── PhotoLoadService.swift         # 文件夹图片枚举加载
+│   │   ├── PhotoLoader.swift              # 按 sourceKind 分派取图/取元数据
+│   │   ├── PhotosLibraryService.swift     # Photos.framework 照片库读取
 │   │   ├── ThumbnailCacheService.swift    # 内存+磁盘缩略图缓存
 │   │   ├── FolderMonitorService.swift     # 文件系统事件监控
-│   │   └── MetadataService.swift          # 元数据读取（mdls 安全调用）
+│   │   ├── MetadataService.swift          # 元数据读取（mdls 安全调用）
+│   │   ├── BlurDetectionService.swift     # 人脸模糊 + 闭眼检测（Vision）
+│   │   ├── BurstDetectionService.swift    # 连拍识别（dHash 相似度）
+│   │   └── PhotoAnalysisStore.swift       # 分析结果持久化（dHash + blur）
 │   └── Utilities/                 # 工具层
 │       ├── ShellExecutor.swift            # 安全命令行执行（异常/超时）
 │       ├── ThumbnailGenerator.swift       # ImageIO 缩略图降采样
-│       └── BookmarkStore.swift            # 安全作用域书签存取
+│       ├── BookmarkStore.swift            # 安全作用域书签存取
+│       └── SharingServiceHelper.swift     # NSSharingService 辅助
 ├── Scripts/                       # 构建发布脚本
-│   ├── generate_icon.sh          # CoreGraphics 生成占位 App 图标
+│   ├── generate_icon.sh          # 生成 App 图标（FC.png -> .icns）
 │   ├── generate_project.sh       # 生成图标 + Xcode 工程
 │   ├── build.sh                  # 编译（Release/Debug）
 │   ├── run.sh                    # Debug 构建并直接运行
+│   ├── package_dmg.sh            # 打包可拖拽安装的 DMG
 │   ├── notarize.sh               # 签名 + 公证 + 装订 + 去隔离
 │   └── remove_quarantine.sh      # 清除 Gatekeeper 隔离属性
 └── README.md
@@ -92,15 +101,15 @@ FrameScoop/
 
 ```
 ┌─────────────────────────────────────┐
-│  视图层 Views (SwiftUI)              │  ContentView / Sidebar / Grid / Detail
+│  视图层 Views (SwiftUI)              │  ContentView / Sidebar / Grid / Detail / FilterSidebar
 ├─────────────────────────────────────┤
 │  视图模型 ViewModels                  │  PhotoLibraryViewModel (@MainActor)
 ├─────────────────────────────────────┤
-│  服务层 Services                     │  Load / Cache / Monitor / Metadata
+│  服务层 Services                     │  Load / Cache / Monitor / Metadata / Blur / Burst / PhotoAnalysisStore
 ├─────────────────────────────────────┤
-│  工具层 Utilities                    │  ShellExecutor / ThumbnailGenerator / BookmarkStore
+│  工具层 Utilities                    │  ShellExecutor / ThumbnailGenerator / BookmarkStore / SharingServiceHelper
 ├─────────────────────────────────────┤
-│  数据模型 Models                      │  PhotoItem / PhotoFolder / SortOption / ImageMetadata
+│  数据模型 Models                      │  PhotoItem / PhotoFolder / FolderNode / SortOption / ImageMetadata
 └─────────────────────────────────────┘
 ```
 
