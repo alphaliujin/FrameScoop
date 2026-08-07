@@ -139,6 +139,12 @@ private struct FolderTreeRow: View {
     }
 
     private var countLabel: String {
+        // 选中节点加载完成后，用经 CGImageSource 校验过的 photos 计数，与缩略图区域
+        // 标题「N 张照片」一致；按扩展名计数会把损坏/非图片文件算进去导致侧栏偏多。
+        // 非选中节点仍用懒加载的近似计数（按扩展名，快速），保留侧栏展开多节点时的性能。
+        if node.id == library.selectedNodeID, !library.isLoading, !library.photosAccessDenied {
+            return "\(library.photos.count) 张"
+        }
         if let count { return "\(count) 张" }
         return "…"
     }

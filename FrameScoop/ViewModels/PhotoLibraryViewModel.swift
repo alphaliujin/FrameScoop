@@ -73,7 +73,18 @@ final class PhotoLibraryViewModel: ObservableObject {
                 // 某筛选正显示时，precomputeAnalysis 内部按缓存即时重排并在流式落库时刷新视图。
                 precomputeAnalysis()
             } else {
+                // 同 ID 集合：通常是文件监控 / iCloud 同步触发的 reload。
+                // mtime 未变（仅元数据/属性变化）-> 只重排，不打断在途预计算。
+                // mtime 有变（原地修改）-> 内存 burstHashes/blurScores 已陈旧，某筛选正显示时
+                // 需重新触发检测：detect 内部按 mtime 校验，将变化项纳入 toCompute 重算。
                 rebuildDisplayedPhotos()
+                if hasMtimeChanges(oldValue, photos) {
+                    if showsBurstFilter {
+                        detectBurstsIfNeeded()
+                    } else if showsBlurFilter || showsEyeClosedFilter {
+                        detectBlurryIfNeeded()
+                    }
+                }
             }
         }
     }
@@ -461,6 +472,13 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 选中节点变化后加载其内容。
     /// 仅由视图的 `.onChange(of: selectedNodeID)` 调用（在更新事务之后执行，安全）。
     func loadContent(for id: String?) {
+        // 启动去重：setUp 设 selectedNodeID 会触发 ContentView.onChange -> loadContent，
+        // 紧接 setUp 又显式调 loadContent，两次同源加载不被 loadToken 去重（同源不递增 token），
+        // 会重复枚举。此处若该源已在加载（lastLoadedKey 命中且 isLoading）则直接返回。
+        // 同文件夹的 reload 走 reloadCurrentFolder 不经此方法，不受影响。
+        if let id, isLoading, id == lastLoadedKey {
+            return
+        }
         // 切换节点 = 切换照片源：递增 token，取消上一个文件夹的在途连拍检测与人脸模糊检测，
         // 避免其结果污染新文件夹。同文件夹的 reload 不走本方法，不会递增。
         burstDetectToken += 1
@@ -892,6 +910,18 @@ final class PhotoLibraryViewModel: ObservableObject {
             : base
     }
 
+    /// 同 ID 集合的两批照片中，是否有任意一张的修改时间发生变化（原地修改信号）。
+    /// 用于监控 reload 时判断是否需重算分析缓存，避免内存 burstHashes/blurScores 用陈旧值。
+    private func hasMtimeChanges(_ a: [PhotoItem], _ b: [PhotoItem]) -> Bool {
+        var prev: [String: Date] = [:]
+        prev.reserveCapacity(a.count)
+        for p in a { prev[p.id] = p.modificationDate }
+        for p in b {
+            if prev[p.id] != p.modificationDate { return true }
+        }
+        return false
+    }
+
     // MARK: - 图片数据导入（连拍 dHash + 人脸模糊 预计算）
 
     /// 预计算后台任务句柄：切文件夹时 cancel 旧任务（协同取消：在途子任务排空即止，不再补充），
@@ -1105,14 +1135,19 @@ final class PhotoLibraryViewModel: ObservableObject {
         )
         var toCompute: [PhotoItem] = []
         var reusedFromDisk: [String: UInt64] = [:]
-        for photo in photos where cached[photo.id] == nil {
+        for photo in photos {
+            // mtime 校验覆盖内存缓存项：照片被外部原地修改（mtime 变）时，即便内存
+            // burstHashes 命中也要重算，避免用陈旧 dHash 分组。原 where cached[id]==nil
+            // 会短路掉内存已缓存的项、跳过 mtime 校验，导致原地修改后的照片沿用旧哈希。
             if let entry = persisted[photo.id],
                let m = mtimeOf[photo.id],
-               abs(m - entry.mtime) < 1.0,             // mtime 未变 -> 复用磁盘哈希
-               let dh = entry.dHash {
-                reusedFromDisk[photo.id] = dh
+               abs(m - entry.mtime) < 1.0 {            // mtime 未变
+                if cached[photo.id] == nil, let dh = entry.dHash {
+                    reusedFromDisk[photo.id] = dh      // 内存无、磁盘有 -> 复用磁盘
+                }
+                // 内存已有且 mtime 未变：直接复用，无需操作
             } else {
-                toCompute.append(photo)
+                toCompute.append(photo)                // mtime 变 / 无磁盘条目 -> 重算
             }
         }
         self.dbg("[BURST] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
@@ -1256,12 +1291,16 @@ final class PhotoLibraryViewModel: ObservableObject {
         )
         var toCompute: [PhotoItem] = []
         var reusedFromDisk: [(String, FaceBlurScore)] = []
-        for photo in photos where cached[photo.id] == nil {
+        for photo in photos {
+            // mtime 校验覆盖内存缓存项：照片被外部原地修改（mtime 变）时，即便内存
+            // blurScores 命中也要重算，避免用陈旧分数分类标记（与 detectBurstsIfNeeded 同理）。
             if let entry = persisted[photo.id],
                let m = mtimeOf[photo.id],
-               abs(m - entry.mtime) < 1.0,
-               let bl = entry.blur, bl.eyeState != nil {
-                reusedFromDisk.append((photo.id, bl))
+               abs(m - entry.mtime) < 1.0 {
+                if cached[photo.id] == nil, let bl = entry.blur, bl.eyeState != nil {
+                    reusedFromDisk.append((photo.id, bl))   // 内存无、磁盘有 -> 复用磁盘
+                }
+                // 内存已有且 mtime 未变：直接复用
             } else {
                 toCompute.append(photo)
             }
