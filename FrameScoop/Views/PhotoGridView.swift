@@ -189,7 +189,7 @@ struct PhotoBadges: View {
     @EnvironmentObject private var library: PhotoLibraryViewModel
 
     var body: some View {
-        let number = library.burstPhotoNumbers[photo.id]
+        let number = library.showsBurstFilter ? library.burstPhotoNumbers[photo.id] : nil
         let blurOn = library.showsBlurFilter
         let isRedBlurry = blurOn && library.blurryPhotoIDs.contains(photo.id)
         let isYellowBlurry = blurOn && library.partialBlurryPhotoIDs.contains(photo.id)

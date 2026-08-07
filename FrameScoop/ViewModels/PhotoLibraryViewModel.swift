@@ -461,9 +461,12 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 选中节点变化后加载其内容。
     /// 仅由视图的 `.onChange(of: selectedNodeID)` 调用（在更新事务之后执行，安全）。
     func loadContent(for id: String?) {
-        // 切换节点 = 切换照片源：递增 token，取消上一个文件夹的在途人脸模糊检测，
+        // 切换节点 = 切换照片源：递增 token，取消上一个文件夹的在途连拍检测与人脸模糊检测，
         // 避免其结果污染新文件夹。同文件夹的 reload 不走本方法，不会递增。
+        burstDetectToken += 1
         blurDetectToken += 1
+        burstDetectTask?.cancel()
+        blurDetectTask?.cancel()
         selectedPhotoIDs.removeAll()
         currentPhoto = nil
         // 立即清空旧照片：避免切到新源时网格短暂残留上一个源的照片（如照片库 -> 文件夹），
@@ -1071,12 +1074,16 @@ final class PhotoLibraryViewModel: ObservableObject {
     private var burstHashes: [String: UInt64] = [:]
     /// 串行化异步检测：仅采纳最新一次的结果，避免旧任务覆盖新结果
     private var burstDetectToken = 0
+    /// 连拍检测后台任务句柄：切文件夹 / 重新检测时 cancel，使 Task.isCancelled 生效，
+    /// 不再补充新子任务（在途子任务排空即止）。与 precomputeTask 同模式。
+    private var burstDetectTask: Task<Void, Never>?
 
     /// 开启/照片变化时：后台并行取小图算 dHash，再分组。
     /// dHash 跨会话持久化（PhotoAnalysisStore）：mtime 未变的照片直接复用磁盘哈希，
     /// 跳过取图+算哈希；仅对新增/改动的照片计算。
     private func detectBurstsIfNeeded() {
         guard showsBurstFilter else {
+            burstDetectTask?.cancel()
             applyBurstSegments([])
             return
         }
@@ -1109,20 +1116,41 @@ final class PhotoLibraryViewModel: ObservableObject {
             }
         }
         self.dbg("[BURST] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
-        Task.detached(priority: .utility) { [weak self] in
+        burstDetectTask?.cancel()
+        burstDetectTask = Task.detached(priority: .utility) { [weak self] in
             let newHashes: [String: UInt64] = await withTaskGroup(of: (String, UInt64?).self) { group in
-                for photo in toCompute {
+                // 限制在途并发：与 precomputeAnalysis / detectBlurryIfNeeded 一致，
+                // 避免一次性提交数千个子任务压垮协作线程池。
+                let maxInflight = 16
+                var iter = toCompute.makeIterator()
+                for _ in 0..<Swift.min(maxInflight, toCompute.count) {
+                    guard let photo = iter.next() else { break }
                     group.addTask {
                         let img = await ThumbnailCacheService.shared.thumbnail(for: photo, maxPixel: 32)
                         return (photo.id, img.flatMap { BurstDetectionService.dHash(of: $0) })
                     }
                 }
                 var result: [String: UInt64] = [:]
-                for await (id, h) in group { if let h { result[id] = h } }
+                for await (id, h) in group {
+                    if let h { result[id] = h }
+                    // 已取消（切了文件夹）：不再补充新任务，让在途子任务排空即止
+                    if Task.isCancelled { continue }
+                    if let photo = iter.next() {
+                        group.addTask {
+                            let img = await ThumbnailCacheService.shared.thumbnail(for: photo, maxPixel: 32)
+                            return (photo.id, img.flatMap { BurstDetectionService.dHash(of: $0) })
+                        }
+                    }
+                }
                 return result
             }
             await MainActor.run { [weak self] in
-                guard let self, token == self.burstDetectToken else { return }
+                guard let self else { return }
+                // token 不匹配（已切文件夹）：仅复位 spinner，不应用旧结果
+                guard token == self.burstDetectToken else {
+                    self.isBurstDetecting = false
+                    return
+                }
                 var hashes = cached
                 for (id, h) in reusedFromDisk { hashes[id] = h }
                 for (id, h) in newHashes { hashes[id] = h }
@@ -1134,9 +1162,9 @@ final class PhotoLibraryViewModel: ObservableObject {
                     similarityThreshold: self.burstSimilarityThreshold
                 ))
                 self.isBurstDetecting = false
-                // 持久化：磁盘已有条目（含其他文件夹、含 blur 字段）合并本轮 (mtime, dHash)，
-                // 保留已存的 blur（互不覆盖）。
-                var merged = persisted
+                // 持久化：从缓存重新读取最新数据（而非检测启动时的快照），
+                // 避免预计算期间其他 save() 写入的 blur 条目被陈旧快照覆盖丢失。
+                var merged = PhotoAnalysisStore.load()
                 for (id, h) in self.burstHashes {
                     let existing = merged[id]
                     merged[id] = (mtime: mtimeOf[id] ?? existing?.mtime ?? 0,
@@ -1185,14 +1213,18 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 同一文件夹的 reload（文件监控 / iCloud 增量下载）不递增——在途检测继续，仅补算未缓存的，
     /// 否则进度会被反复顶掉 token 而永远卡在「已识别 0」。
     private var blurDetectToken = 0
+    /// 模糊检测后台任务句柄：切文件夹 / 重新检测时 cancel，使 Task.isCancelled 生效，
+    /// 不再补充新子任务（在途子任务排空即止）。与 precomputeTask 同模式。
+    private var blurDetectTask: Task<Void, Never>?
     /// 当前在途检测任务数；>0 即 isBlurDetecting。同文件夹增量补算会产生并发任务，共用计数。
     private var blurDetectInFlight = 0
 
     /// 开启/照片变化时：后台并行取缩略图检测人脸 + 算 Laplacian，流式分批落库并刷新标记。
-    /// 优化点：缩略图降到 128px、优先级提到 .userInitiated、每 16 张增量刷新一次（不必等全部算完）。
+    /// 优化点：缩略图取 512px（小脸需 4 倍细节）、优先级 .userInitiated、每 16 张增量刷新一次（不必等全部算完）。
     /// 注意：本方法不递增 token——同文件夹 reload 不取消在途检测；切换文件夹由 loadContent 递增。
     private func detectBlurryIfNeeded() {
         guard showsBlurFilter || showsEyeClosedFilter else {
+            blurDetectTask?.cancel()
             blurryPhotoIDs = []
             partialBlurryPhotoIDs = []
             closedEyePhotoIDs = []
@@ -1250,7 +1282,8 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
         blurDetectInFlight += 1
         isBlurDetecting = true
-        Task.detached(priority: .userInitiated) { [weak self] in
+        blurDetectTask?.cancel()
+        blurDetectTask = Task.detached(priority: .userInitiated) { [weak self] in
             // 单张检测任务体（提取为闭包，预填充与补充两处复用）
             let child: @Sendable (PhotoItem) async -> (String, FaceBlurScore?) = { photo in
                 // 512px：128px 缩略图里小脸只有十几像素，放大到 128×128 算拉普拉斯必然是软糊团
@@ -1283,6 +1316,8 @@ final class PhotoLibraryViewModel: ObservableObject {
                         let b = batch; batch = []
                         await MainActor.run { [weak self] in self?.mergeBlurryBatch(b, token: token) }
                     }
+                    // 已取消（切了文件夹）：不再补充新任务，让在途子任务排空即止
+                    if Task.isCancelled { continue }
                     if let photo = iter.next() {
                         group.addTask { await child(photo) }
                     }
@@ -1293,7 +1328,8 @@ final class PhotoLibraryViewModel: ObservableObject {
                 }
             }
             // 任务结束：递减在途计数，归零才关进度。token 不匹配（已切文件夹）也照常递减，
-            // 保证计数不会因切文件夹而卡住。最后把 blur 分存盘（保留 dHash 字段）。
+            // 保证计数不会因切文件夹而卡住。存盘仅在 token 匹配时执行，避免用旧文件夹的
+            // mtimeOf 覆盖新文件夹的数据。
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.blurDetectInFlight -= 1
@@ -1301,13 +1337,14 @@ final class PhotoLibraryViewModel: ObservableObject {
                     self.blurDetectInFlight = 0
                     self.isBlurDetecting = false
                 }
+                guard token == self.blurDetectToken else { return }
                 self.persistBlurScores(mtimeOf: mtimeOf)
             }
         }
     }
 
     /// 把内存里的 blurScores 合并进磁盘分析缓存（保留已存的 dHash 字段，互不覆盖）。
-    /// 从缓存重新读取最新数据（而非 detectBlurpyIfNeeded 启动时的快照），
+    /// 从缓存重新读取最新数据（而非 detectBlurryIfNeeded 启动时的快照），
     /// 避免预计算期间其他 save() 写入的 dHash 条目被陈旧快照覆盖丢失。
     private func persistBlurScores(mtimeOf: [String: Double]) {
         var merged = PhotoAnalysisStore.load()

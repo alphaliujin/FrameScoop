@@ -19,6 +19,7 @@
 | 元数据面板 | 显示像素尺寸、色彩空间、拍摄设备、EXIF（光圈/ISO/焦距/快门等） |
 | 文件监控 | 文件夹变化自动刷新（DispatchSource，无需轮询） |
 | 废纸篓 | 选中图片可移到废纸篓（原生 trashItem，可恢复） |
+| 智能筛选 | 右侧筛选边栏：连拍识别（dHash 相似度分组）、人脸模糊检测（Vision + Laplacian）、闭眼检测（Vision 人脸 landmarks）；分析结果跨会话持久化（mtime 未变即复用磁盘缓存） |
 
 ---
 
@@ -276,6 +277,19 @@ bash Scripts/remove_quarantine.sh /path/to/FrameScoop.app
 
 ### 4. 通用二进制
 `project.yml` 中 `ARCHS: "$(ARCHS_STANDARD)"` 配合 `COMBINE_HIDPI_IMAGES`，产物同时包含 `arm64` 与 `x86_64`，Apple Silicon / Intel 均原生运行。
+
+### 5. 智能筛选的异步检测与并发控制
+连拍检测（`detectBurstsIfNeeded`）与模糊/闭眼检测（`detectBlurryIfNeeded`）均采用统一的异步模式，保证大图库下不卡 UI、切文件夹时干净取消：
+
+- **Task 句柄 + token 双重取消**：每种检测持有 `xxxDetectTask: Task<Void, Never>?` 与 `xxxDetectToken: Int`。切换文件夹（`loadContent`）时递增 token 并 `cancel()` 旧任务；`Task.isCancelled` 使在途子任务不再补充新任务，排空即止。token 不匹配时仅复位 spinner、不应用旧结果。
+- **maxInflight 并发限制**：`withTaskGroup` 内限制在途子任务数（连拍 16、模糊 16），避免一次性提交数千个子任务压垮 Swift 协作线程池。迭代器按需补充，与 `precomputeAnalysis` 同模式。
+- **流式分批刷新**：模糊检测每 16 张调一次 `mergeBlurlyBatch` 增量刷新 UI，不必等全部算完。
+- **持久化防覆盖**：存盘时从 `PhotoAnalysisStore.load()` 重新读取最新缓存（而非检测启动时的快照），避免预计算期间其他 `save()` 写入的字段（blur ↔ dHash）被陈旧快照覆盖丢失。
+- **缩略图尺寸**：模糊检测取 512px 缩略图（小脸需 4 倍细节，128px 下小脸仅十几像素会导致误判）；连拍检测取 32px dHash。
+- **持久化仅在 token 匹配时执行**：避免用旧文件夹的 `mtimeOf` 覆盖新文件夹的数据。
+
+### 6. 详情视图的加载竞态保护
+`PhotoDetailView` 在加载大图与元数据后校验 `Task.isCancelled`：用户快速切换上下张时，旧图加载完成后不会短暂覆盖新图。
 
 ---
 

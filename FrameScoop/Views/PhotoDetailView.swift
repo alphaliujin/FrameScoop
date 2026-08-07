@@ -227,6 +227,8 @@ struct PhotoDetailView: View {
         }
         async let meta = library.loadMetadata(for: photo)
         let (img, md) = await (imageTask.value, meta)
+        // 校验任务未取消（用户已切到下一张）：避免旧图加载完成后短暂覆盖新图
+        guard !Task.isCancelled else { return }
         image = img
         metadata = md
     }
