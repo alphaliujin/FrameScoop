@@ -102,6 +102,8 @@ struct FilterSidebarView: View {
                 }
                 .padding(12)
             }
+
+            brandLogo
         }
         // 「保留选中」会批量删除未选中照片，先确认再执行
         .confirmationDialog("保留选中的连拍照片？",
@@ -114,5 +116,16 @@ struct FilterSidebarView: View {
         } message: {
             Text("将删除当前未选中的 \(keepDeleteCount) 张连拍照片，保留选中的 \(library.selectedPhotoIDs.count) 张。删除后移到废纸篓，可恢复。")
         }
+    }
+
+    /// 右边栏底部品牌图：宽度与边栏同宽，背景透明；白天/夜晚外观由 Asset Catalog 的 imageset 外观变体自动切换
+    private var brandLogo: some View {
+        Image("BrandLogo")
+            .resizable()
+            .scaledToFit()
+            .opacity(0.55)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
     }
 }

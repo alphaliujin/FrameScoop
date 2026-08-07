@@ -160,6 +160,13 @@ struct PhotoDetailView: View {
                     .help("播放中，每 2 秒自动翻页；按方向键退出")
             }
             Spacer()
+            // 选中标记（与网格一致的 checkmark.circle.fill）
+            if library.selectedPhotoIDs.contains(photo.id) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.white, .tint)
+                    .shadow(radius: 1)
+            }
             Button {
                 withAnimation { library.showsInfoPanel.toggle() }
             } label: {
