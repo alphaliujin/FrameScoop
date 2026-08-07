@@ -97,7 +97,24 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var selectedPhotoIDs: Set<String> = []
 
     /// 详情视图当前展示的图片
-    @Published var currentPhoto: PhotoItem?
+    @Published var currentPhoto: PhotoItem? {
+        didSet {
+            // 关闭详情 / 切换文件夹 / 移除当前图导致 currentPhoto 变 nil 时，停止幻灯片播放
+            if currentPhoto == nil { stopSlideshow() }
+        }
+    }
+
+    /// 幻灯片播放方向（详情视图双击方向键触发）：off 不播放；forward/backward 每 2 秒自动翻页
+    enum SlideshowMode: Equatable { case off, forward, backward }
+    @Published private(set) var slideshowMode: SlideshowMode = .off
+    /// 播放定时任务（每 2 秒翻一页；cancel 即停止）
+    private var slideshowTask: Task<Void, Never>?
+    /// 双击方向键进入播放的判定窗口（秒）：两次方向键点击间隔小于此值视为双击
+    private let slideshowDoubleTapInterval: TimeInterval = 0.4
+    /// 每张图片播放停留时间（秒）
+    private let slideshowInterval: TimeInterval = 2.0
+    /// 上一次方向键点击（方向 + 时刻），用于双击判定
+    private var lastArrowTap: (direction: SlideshowMode, time: Date)?
 
     /// 加载中状态
     @Published var isLoading: Bool = false
@@ -642,6 +659,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 选中并打开图片到详情窗口。
     /// 由调用方（视图，持有 openWindow 环境）负责随后 openWindow(id: "photo-detail")。
     func openPhoto(_ photo: PhotoItem) {
+        stopSlideshow()
         selectSingle(photo)
         currentPhoto = photo
         showsInfoPanel = false
@@ -655,6 +673,68 @@ final class PhotoLibraryViewModel: ObservableObject {
     func previousPhoto() {
         guard let idx = currentPhotoIndex, idx > 0 else { return }
         currentPhoto = displayedPhotos[idx - 1]
+    }
+
+    // MARK: - 幻灯片播放
+
+    /// 方向键点击分发：非播放态单击翻页、快速双击进入连续播放；播放态任意方向键退出播放。
+    /// 由菜单命令通知（.nextPhotoRequested / .previousPhotoRequested）调用。
+    private func handleArrowTap(_ direction: SlideshowMode) {
+        if slideshowMode != .off {
+            // 退出播放：方向键经菜单命令触发，可能在视图更新事务中被同步调用；
+            // 延后到下一 runloop 再改 @Published，避免 "Publishing changes from within view updates"。
+            Task { @MainActor [weak self] in self?.stopSlideshow() }
+            return
+        }
+        let now = Date()
+        if let last = lastArrowTap, last.direction == direction,
+           now.timeIntervalSince(last.time) < slideshowDoubleTapInterval {
+            // 双击：进入播放（第一次单击已翻页，从当前位置开始连续播放）
+            lastArrowTap = nil
+            Task { @MainActor [weak self] in self?.startSlideshow(direction: direction) }
+            return
+        }
+        // 单击：翻一页并记录时刻（非播放态视图更新稀疏，nextPhoto 先于其触发的渲染执行，同步安全）
+        lastArrowTap = (direction, now)
+        if direction == .forward { nextPhoto() } else { previousPhoto() }
+    }
+
+    /// 开始幻灯片播放：每 slideshowInterval 秒向 direction 方向翻一页，到边界自动停止。
+    private func startSlideshow(direction: SlideshowMode) {
+        slideshowMode = direction
+        slideshowTask?.cancel()
+        slideshowTask = Task { @MainActor [weak self] in
+            // 先在当前张停留满 slideshowInterval 再翻页
+            while let self, !Task.isCancelled, self.slideshowMode == direction {
+                try? await Task.sleep(for: .seconds(self.slideshowInterval))
+                guard !Task.isCancelled, self.slideshowMode == direction else { break }
+                if !self.advanceForSlideshow(direction: direction) { break }   // 到边界
+            }
+            // 循环结束（到边界 / 切方向 / 取消）：若仍是本方向则复位为 off
+            if self?.slideshowMode == direction {
+                self?.slideshowMode = .off
+            }
+        }
+    }
+
+    /// 播放翻一页；返回 false 表示已到边界（无法继续）。
+    private func advanceForSlideshow(direction: SlideshowMode) -> Bool {
+        if direction == .forward {
+            guard let idx = currentPhotoIndex, idx + 1 < displayedPhotos.count else { return false }
+            nextPhoto()
+            return true
+        } else {
+            guard let idx = currentPhotoIndex, idx > 0 else { return false }
+            previousPhoto()
+            return true
+        }
+    }
+
+    /// 停止幻灯片播放
+    private func stopSlideshow() {
+        slideshowTask?.cancel()
+        slideshowTask = nil
+        slideshowMode = .off
     }
 
     /// 在 Finder 中显示选中图片（仅文件夹源；照片库源无对应文件）
@@ -1555,11 +1635,11 @@ final class PhotoLibraryViewModel: ObservableObject {
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .nextPhotoRequested)
-            .sink { [weak self] _ in self?.nextPhoto() }
+            .sink { [weak self] _ in self?.handleArrowTap(.forward) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .previousPhotoRequested)
-            .sink { [weak self] _ in self?.previousPhoto() }
+            .sink { [weak self] _ in self?.handleArrowTap(.backward) }
             .store(in: &cancellables)
     }
 }

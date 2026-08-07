@@ -17,7 +17,6 @@ struct PhotoDetailView: View {
     let photo: PhotoItem
 
     @EnvironmentObject var library: PhotoLibraryViewModel
-    @Environment(\.dismissWindow) private var dismissWindow
     @State private var image: NSImage?
     @State private var metadata: ImageMetadata?
     @State private var scale: CGFloat = 1.0
@@ -145,6 +144,16 @@ struct PhotoDetailView: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .padding(.top, 30)
+            if library.slideshowMode != .off {
+                Label("播放中", systemImage: library.slideshowMode == .forward ? "play.fill" : "backward.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .padding(.top, 30)
+                    .help("播放中，每 2 秒自动翻页；按方向键退出")
+            }
             Spacer()
             Button {
                 withAnimation { library.showsInfoPanel.toggle() }
@@ -193,7 +202,10 @@ struct PhotoDetailView: View {
                     ForEach(library.displayedPhotos) { item in
                         FilmstripThumbnail(item: item, isCurrent: item.id == photo.id)
                             .frame(width: 64, height: 64)
-                            .onTapGesture { library.currentPhoto = item }
+                            .onTapGesture {
+                                // 同 closeWindow：手势闭包可能落在视图更新事务中，延后发布
+                                Task { @MainActor in library.currentPhoto = item }
+                            }
                             .id(item.id)
                     }
                 }
@@ -212,8 +224,13 @@ struct PhotoDetailView: View {
     // MARK: - 加载
 
     private func closeWindow() {
-        library.currentPhoto = nil
-        dismissWindow(id: "photo-detail")
+        // 延后清空 currentPhoto：onKeyPress 闭包可能在视图更新事务期间被同步调用
+        //（播放时每 2s 视图更新一次，Esc 易落在事务中），同步改 @Published 会触发
+        // "Publishing changes from within view updates"。延后到下一 runloop；
+        // currentPhoto=nil 的 didSet 会停止播放，DetailWindowRoot 观察到 nil 后自动关窗。
+        Task { @MainActor in
+            library.currentPhoto = nil
+        }
     }
 
     private func loadImageAndMetadata() async {
