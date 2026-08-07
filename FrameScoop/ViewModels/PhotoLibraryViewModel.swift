@@ -652,6 +652,17 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
     }
 
+    /// 切换当前详情图片的选中状态（详情视图中按空格；播放中可标记当前张）。
+    /// 同步捕获 currentPhoto 再延后发布：空格经 onKeyPress 可能在视图更新事务中触发
+    ///（播放时每 2s 更新），且避免播放翻页后 currentPhoto 已变导致标记错张。
+    /// 选中态存于 selectedPhotoIDs，跨详情窗口保留；关闭详情返回主界面网格仍高亮。
+    func toggleCurrentSelection() {
+        guard let photo = currentPhoto else { return }
+        Task { @MainActor [weak self] in
+            self?.toggleSelection(photo)
+        }
+    }
+
     func selectSingle(_ photo: PhotoItem) {
         selectedPhotoIDs = [photo.id]
     }

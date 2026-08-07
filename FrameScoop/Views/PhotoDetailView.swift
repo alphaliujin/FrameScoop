@@ -78,6 +78,11 @@ struct PhotoDetailView: View {
         //（菜单 key equivalent 经 performKeyEquivalent 先于 keyDown 派发并消费事件），
         // 此处不再绑定 onKeyPress 方向键，避免与菜单命令重复触发（双倍跳转）。
         .onKeyPress(.escape) { closeWindow(); return .handled }
+        .onKeyPress(.space) {
+            // 空格选中当前图片（播放中标记当前张；选中态跨详情窗口保留，返回主界面网格仍高亮）
+            library.toggleCurrentSelection()
+            return .handled
+        }
     }
 
     // MARK: - 主图
