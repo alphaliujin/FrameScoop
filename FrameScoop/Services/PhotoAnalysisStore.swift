@@ -45,7 +45,7 @@ enum PhotoAnalysisStore {
     // MARK: - 内存缓存
 
     /// 内存缓存：避免预计算期间反复从磁盘读取整个 JSON。所有 load/save 均在 @MainActor 调用。
-    private nonisolated(unsafe) static let cacheLock = NSLock()
+    private static let cacheLock = NSLock()
     private nonisolated(unsafe) static var memoryCache: [String: (mtime: Double, dHash: UInt64?, blur: FaceBlurScore?)]?
 
     /// 读全部条目：photoID -> (mtime, dHash?, blur?)。读失败返回空（按未命中处理，重算）。

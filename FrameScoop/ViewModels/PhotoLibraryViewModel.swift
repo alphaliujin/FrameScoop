@@ -25,7 +25,7 @@ import Photos
 /// 文件作用域 + nonisolated，便于从 detached task 直接调用收集（无 MainActor 跳转）。
 enum DebugLog {
     private static let url = URL(fileURLWithPath: "/tmp/framescoop-debug.log")
-    private nonisolated(unsafe) static let queue = DispatchQueue(label: "framescoop.debuglog")
+    private static let queue = DispatchQueue(label: "framescoop.debuglog")
 
     static func write(_ s: String) {
         let data = Data((s + "\n").utf8)
@@ -999,7 +999,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                         let d = batchD; batchD = []
                         let b = batchB; batchB = []
                         let dd = doneDelta; doneDelta = 0
-                        await MainActor.run { self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
+                        await MainActor.run { [weak self] in self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
                     }
                     // 已取消（切了文件夹）：不再补充新任务，让在途子任务排空即止
                     if Task.isCancelled { continue }
@@ -1010,11 +1010,11 @@ final class PhotoLibraryViewModel: ObservableObject {
                 // 尾批
                 if doneDelta > 0 || !batchD.isEmpty || !batchB.isEmpty {
                     let d = batchD; let b = batchB; let dd = doneDelta
-                    await MainActor.run { self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
+                    await MainActor.run { [weak self] in self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
                 }
             }
             // 全部完成：关进度 + 存盘（token 不匹配=已切文件夹，丢弃）
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self, token == self.precomputeToken else { return }
                 self.isPrecomputing = false
                 self.persistPrecompute()
@@ -1121,7 +1121,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                 for await (id, h) in group { if let h { result[id] = h } }
                 return result
             }
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self, token == self.burstDetectToken else { return }
                 var hashes = cached
                 for (id, h) in reusedFromDisk { hashes[id] = h }
@@ -1281,7 +1281,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                     if let s { batch.append((id, s)) }
                     if batch.count >= 16 {
                         let b = batch; batch = []
-                        await MainActor.run { self?.mergeBlurryBatch(b, token: token) }
+                        await MainActor.run { [weak self] in self?.mergeBlurryBatch(b, token: token) }
                     }
                     if let photo = iter.next() {
                         group.addTask { await child(photo) }
@@ -1289,12 +1289,12 @@ final class PhotoLibraryViewModel: ObservableObject {
                 }
                 if !batch.isEmpty {
                     let b = batch
-                    await MainActor.run { self?.mergeBlurryBatch(b, token: token) }
+                    await MainActor.run { [weak self] in self?.mergeBlurryBatch(b, token: token) }
                 }
             }
             // 任务结束：递减在途计数，归零才关进度。token 不匹配（已切文件夹）也照常递减，
             // 保证计数不会因切文件夹而卡住。最后把 blur 分存盘（保留 dHash 字段）。
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.blurDetectInFlight -= 1
                 if self.blurDetectInFlight <= 0 {

@@ -43,7 +43,7 @@ final class ThumbnailCacheService {
     private let inFlight = InFlightTracker()
 
     /// 磁盘清理节流计数器：每 pruneThreshold 次写入才触发一次 pruneDiskCache
-    private nonisolated(unsafe) static let pruneCounterQueue = DispatchQueue(label: "framescoop.prune-counter")
+    private static let pruneCounterQueue = DispatchQueue(label: "framescoop.prune-counter")
     private nonisolated(unsafe) static var writesSincePrune = 0
     private static let pruneThreshold = 50
 
