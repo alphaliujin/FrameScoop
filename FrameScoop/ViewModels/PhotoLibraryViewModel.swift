@@ -507,6 +507,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         burstDetectTask?.cancel()
         blurDetectTask?.cancel()
         selectedPhotoIDs.removeAll()
+        // 切文件夹时复位「只显示选中」：selectedPhotoIDs 已清空，若不复位则
+        // rebuildDisplayedPhotos 会用空选中集过滤出空列表，网格显示「暂无图片」。
+        showsSelectedOnly = false
         currentPhoto = nil
         // 立即清空旧照片：避免切到新源时网格短暂残留上一个源的照片（如照片库 -> 文件夹），
         // 并尽早取消上一个源的在途预计算（photos=[] 的 didSet 会 cancel precomputeTask）。
@@ -575,12 +578,14 @@ final class PhotoLibraryViewModel: ObservableObject {
         #if DEBUG
         dbg("[DBG] loadPhotos \(url.lastPathComponent) token=\(token)")
         #endif
-        Task {
-            let items = await loadService.loadPhotos(from: url)
+        let service = loadService
+        Task { [weak self] in
+            let items = await service.loadPhotos(from: url)
+            guard let self else { return }
             #if DEBUG
-            self.dbg("[DBG] loadPhotos done \(url.lastPathComponent) items=\(items.count) match=\(token == loadToken)")
+            self.dbg("[DBG] loadPhotos done \(url.lastPathComponent) items=\(items.count) match=\(token == self.loadToken)")
             #endif
-            guard token == loadToken else { return }
+            guard token == self.loadToken else { return }
             self.photos = items
             self.isLoading = false
         }
@@ -595,14 +600,15 @@ final class PhotoLibraryViewModel: ObservableObject {
             lastLoadedKey = PhotosLibraryService.sidebarNodeID
         }
         let token = loadToken
-        Task {
+        Task { [weak self] in
             // 鉴权前原始状态：0=notDetermined 1=restricted 2=denied 3=authorized
             let rawBefore = PHPhotoLibrary.authorizationStatus(for: .readWrite).rawValue
             let status = await PhotosLibraryService.shared.requestAuthorization()
+            guard let self else { return }
             #if DEBUG
             self.dbg("[DBG] photosLibrary auth before=\(rawBefore) after=\(status)")
             #endif
-            guard token == loadToken else { return }
+            guard token == self.loadToken else { return }
             guard status == .authorized else {
                 self.photos = []
                 self.isLoading = false
@@ -613,7 +619,7 @@ final class PhotoLibraryViewModel: ObservableObject {
             #if DEBUG
             self.dbg("[DBG] photosLibrary loaded items=\(items.count)")
             #endif
-            guard token == loadToken else { return }
+            guard token == self.loadToken else { return }
             self.photos = items
             self.isLoading = false
             self.photosAccessDenied = false
@@ -795,6 +801,10 @@ final class PhotoLibraryViewModel: ObservableObject {
         let folderURLs = targets.filter { $0.sourceKind == .folder }.compactMap { $0.url }
         let photoIDs = targets.filter { $0.sourceKind == .photoLibrary }.compactMap { $0.assetIdentifier }
         guard !folderURLs.isEmpty || !photoIDs.isEmpty else { return }
+        // 捕获当前节点信息：异步删除期间用户可能切换文件夹，
+        // 届时 reloadCurrentFolder() 会加载新文件夹而非被删图片所在的文件夹。
+        let needPhotosLibraryReload = targets.contains { $0.sourceKind == .photoLibrary }
+        let folderReloadURL = selectedNode?.url
         Task { [weak self] in
             var failed = 0
             // 文件夹源：逐张废纸篓
@@ -809,8 +819,14 @@ final class PhotoLibraryViewModel: ObservableObject {
                 if !ok { failed += photoIDs.count }
             }
             guard let self else { return }
-            // 无论部分成功与否都刷新网格，使已删除的从界面移除
-            self.reloadCurrentFolder()
+            // 刷新被删图片所在的文件夹（非当前选中文件夹时仅刷新文件监控触发的 reload）
+            if needPhotosLibraryReload {
+                self.loadPhotosLibrary()
+            } else if let folderReloadURL {
+                self.loadPhotos(from: folderReloadURL)
+            } else {
+                self.reloadCurrentFolder()
+            }
             if failed > 0 {
                 self.errorMessage = "有 \(failed) 张图片无法移到废纸篓"
             }
@@ -883,8 +899,7 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 用户选择的目标目录需激活安全作用域以写入（安全作用域为进程级，跨线程有效）；
         // 在导出任务完成后于主线程停止，避免提前停止导致后续写入失败。
         let started = dest.startAccessingSecurityScopedResource()
-        // 强捕获 self：导出期间保留 VM（@MainActor 类，Sendable），避免 weak-self 在 @Sendable 闭包中触发并发告警
-        Task.detached { [self] in
+        Task.detached { [weak self] in
             var successCount = 0
             var failedCount = 0
             var lastError: String?
@@ -915,7 +930,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                 : nil
             await MainActor.run {
                 if started { dest.stopAccessingSecurityScopedResource() }
-                if let msg { self.errorMessage = msg }
+                if let msg { self?.errorMessage = msg }
             }
         }
     }
@@ -942,7 +957,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     func copySelectionToClipboard() {
         let items = selectedItems
         guard !items.isEmpty else { return }
-        Task.detached {
+        Task.detached { [weak self] in
             let folderURLs = items.filter { $0.sourceKind == .folder }.compactMap { $0.url }
             // 单张时额外把图片本身放上剪贴板，便于粘贴到聊天/编辑器
             let single = items.count == 1 ? items.first : nil
@@ -1187,14 +1202,16 @@ final class PhotoLibraryViewModel: ObservableObject {
         for (id, h) in dhashes { burstHashes[id] = h }
         for (id, s) in blurs { blurScores[id] = s; classifyBlurry(id, s); classifyEyeClosed(id, s) }
         precomputeDone += doneDelta
-        if showsBurstFilter { regroupBursts() }
-        else if showsBlurFilter || showsEyeClosedFilter { regroupBlurry() }
-        // 周期性存盘：每 128 张落一次，中断也不至于全丢
+        // 周期性存盘 + 重排：每 128 张落一次（与存盘节拍对齐），避免每 16 张都做
+        // O(n log n) 排序导致大图库预计算期间总开销达 O(n² log n)。
+        // 非存盘点仅靠 @Published 集合（blurryPhotoIDs 等）的增量更新驱动 cell overlay 刷新。
         if precomputeDone - precomputeSavedCheckpoint >= 128 {
             precomputeSavedCheckpoint = precomputeDone
             #if DEBUG
             self.dbg("[PRE] progress \(precomputeDone)/\(precomputeTotal)")
             #endif
+            if showsBurstFilter { regroupBursts() }
+            else if showsBlurFilter || showsEyeClosedFilter { regroupBlurry() }
             persistPrecompute()
         }
     }

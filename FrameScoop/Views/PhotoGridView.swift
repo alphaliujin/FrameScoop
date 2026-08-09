@@ -55,7 +55,7 @@ struct PhotoGridView: View {
                             availableWidth: geo.size.width,
                             segments: library.displayedBurstSegments,
                             cellWidth: { photo in max(library.thumbnailSize.cellSize * photo.aspectRatio, 40) },
-                            content: { photo in cell(for: photo) }
+                            content: { photo in cell(for: photo).equatable() }
                         )
                     } else {
                         FlowLayout(
@@ -64,7 +64,7 @@ struct PhotoGridView: View {
                             availableWidth: geo.size.width,
                             items: library.displayedPhotos
                         ) { photo in
-                            cell(for: photo)
+                            cell(for: photo).equatable()
                         }
                     }
                 }
@@ -74,34 +74,87 @@ struct PhotoGridView: View {
     }
 
     /// 单个缩略图 cell（连拍 / 普通网格共用）：选中态、双击打开、单击选择、右键菜单。
-    /// 用 AnyView 擦除类型，便于在 BurstFlowLayout / FlowLayout 的泛型 content 闭包中复用。
-    private func cell(for photo: PhotoItem) -> AnyView {
-        let isSelected = library.selectedPhotoIDs.contains(photo.id)
-        let cellSize = library.thumbnailSize.cellSize
-        let width = max(cellSize * photo.aspectRatio, 40)
-        return AnyView(
-            PhotoThumbnailCell(photo: photo, isSelected: isSelected, thumbnailSize: library.thumbnailSize)
-                .frame(width: width, height: cellSize)
-                .overlay(alignment: .topLeading) {
-                    PhotoBadges(photo: photo)
-                        .padding(2)
-                        .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) { openInDetail(photo) }
-                .onTapGesture(count: 1) { library.toggleSelection(photo) }
-                .contextMenu {
-                    Button("打开") { openInDetail(photo) }
-                    if photo.sourceKind == .folder {
-                        Button("在 Finder 中显示") { library.revealInFinder(photo) }
-                    }
-                    Divider()
-                    Button("移到废纸篓", role: .destructive) {
-                        library.trashPhotos([photo.id])
-                    }
-                }
+    /// 返回 concrete GridCell（Equatable），配合 .equatable() 让 SwiftUI 跳过未变化 cell 的 body 求值，
+    /// 避免 VM 任意 @Published 变化（如预计算进度）触发全量网格重渲染。
+    private func cell(for photo: PhotoItem) -> GridCell {
+        let blurOn = library.showsBlurFilter
+        let eyeClosedOn = library.showsEyeClosedFilter
+        return GridCell(
+            photo: photo,
+            isSelected: library.selectedPhotoIDs.contains(photo.id),
+            thumbnailSize: library.thumbnailSize,
+            badgeNumber: library.showsBurstFilter ? library.burstPhotoNumbers[photo.id] : nil,
+            isRedBlurry: blurOn && library.blurryPhotoIDs.contains(photo.id),
+            isYellowBlurry: blurOn && library.partialBlurryPhotoIDs.contains(photo.id),
+            isRedEye: eyeClosedOn && library.closedEyePhotoIDs.contains(photo.id),
+            isYellowEye: eyeClosedOn && library.partialClosedEyePhotoIDs.contains(photo.id),
+            onDoubleTap: { openInDetail(photo) },
+            onSingleTap: { library.toggleSelection(photo) },
+            onReveal: { library.revealInFinder(photo) },
+            onTrash: { library.trashPhotos([photo.id]) }
         )
     }
+
+    // MARK: - 网格单元格（Equatable，跳过未变化 cell 的重渲染）
+
+    /// 网格单元格：封装缩略图 + 选中态 + 徽标 + 手势 + 右键菜单。
+    /// 遵循 Equatable：SwiftUI 经 .equatable() 对比后，跳过未变化 cell 的 body 求值，
+    /// 避免 VM 任意 @Published 变化（如预计算进度）触发全量网格重渲染。
+    private struct GridCell: View, Equatable {
+    let photo: PhotoItem
+    let isSelected: Bool
+    let thumbnailSize: ThumbnailSize
+    let badgeNumber: Int?
+    let isRedBlurry: Bool
+    let isYellowBlurry: Bool
+    let isRedEye: Bool
+    let isYellowEye: Bool
+
+    var onDoubleTap: () -> Void
+    var onSingleTap: () -> Void
+    var onReveal: () -> Void
+    var onTrash: () -> Void
+
+    static func == (lhs: GridCell, rhs: GridCell) -> Bool {
+        lhs.photo.id == rhs.photo.id
+        && lhs.isSelected == rhs.isSelected
+        && lhs.thumbnailSize == rhs.thumbnailSize
+        && lhs.badgeNumber == rhs.badgeNumber
+        && lhs.isRedBlurry == rhs.isRedBlurry
+        && lhs.isYellowBlurry == rhs.isYellowBlurry
+        && lhs.isRedEye == rhs.isRedEye
+        && lhs.isYellowEye == rhs.isYellowEye
+    }
+
+    var body: some View {
+        let cellSize = thumbnailSize.cellSize
+        let width = max(cellSize * photo.aspectRatio, 40)
+        PhotoThumbnailCell(photo: photo, isSelected: isSelected, thumbnailSize: thumbnailSize)
+            .frame(width: width, height: cellSize)
+            .overlay(alignment: .topLeading) {
+                PhotoBadges(
+                    number: badgeNumber,
+                    isRedBlurry: isRedBlurry,
+                    isYellowBlurry: isYellowBlurry,
+                    isRedEye: isRedEye,
+                    isYellowEye: isYellowEye
+                )
+                .padding(2)
+                .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { onDoubleTap() }
+            .onTapGesture(count: 1) { onSingleTap() }
+            .contextMenu {
+                Button("打开") { onDoubleTap() }
+                if photo.sourceKind == .folder {
+                    Button("在 Finder 中显示") { onReveal() }
+                }
+                Divider()
+                Button("移到废纸篓", role: .destructive) { onTrash() }
+            }
+    }
+}
 
     // MARK: - 加载占位
 
@@ -198,18 +251,13 @@ struct PhotoGridView: View {
 /// 网格缩略图与详情页大图共用；各项按对应筛选开关门控（开关关闭则不显示该项）。
 /// 底层数据由预计算始终算好，与开关解耦。调用方负责定位、缩放与 allowsHitTesting。
 struct PhotoBadges: View {
-    let photo: PhotoItem
-    @EnvironmentObject private var library: PhotoLibraryViewModel
+    let number: Int?
+    let isRedBlurry: Bool
+    let isYellowBlurry: Bool
+    let isRedEye: Bool
+    let isYellowEye: Bool
 
     var body: some View {
-        let number = library.showsBurstFilter ? library.burstPhotoNumbers[photo.id] : nil
-        let blurOn = library.showsBlurFilter
-        let isRedBlurry = blurOn && library.blurryPhotoIDs.contains(photo.id)
-        let isYellowBlurry = blurOn && library.partialBlurryPhotoIDs.contains(photo.id)
-        let eyeClosedOn = library.showsEyeClosedFilter
-        let isRedEye = eyeClosedOn && library.closedEyePhotoIDs.contains(photo.id)
-        let isYellowEye = eyeClosedOn && library.partialClosedEyePhotoIDs.contains(photo.id)
-
         Group {
             if number != nil || isRedBlurry || isYellowBlurry || isRedEye || isYellowEye {
                 HStack(spacing: 2) {

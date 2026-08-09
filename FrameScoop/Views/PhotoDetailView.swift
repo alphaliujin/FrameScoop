@@ -98,7 +98,13 @@ struct PhotoDetailView: View {
             .overlay(alignment: .topLeading) {
                 // 左上角徽标：与网格一致的连拍编号 / 模糊 / 闭眼标记；
                 // 下移避开顶部标题栏，固定不随图片缩放/平移移动
-                PhotoBadges(photo: photo)
+                PhotoBadges(
+                    number: library.showsBurstFilter ? library.burstPhotoNumbers[photo.id] : nil,
+                    isRedBlurry: library.showsBlurFilter && library.blurryPhotoIDs.contains(photo.id),
+                    isYellowBlurry: library.showsBlurFilter && library.partialBlurryPhotoIDs.contains(photo.id),
+                    isRedEye: library.showsEyeClosedFilter && library.closedEyePhotoIDs.contains(photo.id),
+                    isYellowEye: library.showsEyeClosedFilter && library.partialClosedEyePhotoIDs.contains(photo.id)
+                )
                     .scaleEffect(1.6, anchor: .topLeading)
                     .padding(.top, 56)
                     .padding(.leading, 12)
@@ -293,7 +299,9 @@ private struct FilmstripThumbnail: View {
                 .strokeBorder(isCurrent ? Color.accentColor : .clear, lineWidth: 3)
         )
         .task(id: item.id) {
-            image = await ThumbnailCacheService.shared.thumbnail(for: item, maxPixel: 128)
+            let img = await ThumbnailCacheService.shared.thumbnail(for: item, maxPixel: 128)
+            guard !Task.isCancelled else { return }
+            image = img
         }
     }
 }
