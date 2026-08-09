@@ -1106,7 +1106,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 检查点从「已复用数」起算：周期存盘按新算的张数计（每 128 张），避免首批触发冗余全量写
         precomputeSavedCheckpoint = precomputeDone
         isPrecomputing = !toCompute.isEmpty
+        #if DEBUG
         self.dbg("[PRE] reused=\(precomputeDone) compute=\(toCompute.count) total=\(photos.count)")
+        #endif
 
         // 反映到视图：筛选在显示则按（已复用的）缓存重排，否则普通重排
         if showsBurstFilter { regroupBursts() }
@@ -1189,7 +1191,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 周期性存盘：每 128 张落一次，中断也不至于全丢
         if precomputeDone - precomputeSavedCheckpoint >= 128 {
             precomputeSavedCheckpoint = precomputeDone
+            #if DEBUG
             self.dbg("[PRE] progress \(precomputeDone)/\(precomputeTotal)")
+            #endif
             persistPrecompute()
         }
     }
@@ -1266,7 +1270,9 @@ final class PhotoLibraryViewModel: ObservableObject {
                 toCompute.append(photo)                // mtime 变 / 无磁盘条目 -> 重算
             }
         }
+        #if DEBUG
         self.dbg("[BURST] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
+        #endif
         burstDetectTask?.cancel()
         burstDetectTask = Task.detached(priority: .utility) { [weak self] in
             let newHashes: [String: UInt64] = await withTaskGroup(of: (String, UInt64?).self) { group in
@@ -1430,7 +1436,9 @@ final class PhotoLibraryViewModel: ObservableObject {
         // blurryPhotoIDs 为空（筛选刚从关->开时上方清空了集合，但缓存命中走早返回
         // 不再分类），否则开关一开要等用户动一下阈值才出标记。
         self.applyBlurryScores()
+        #if DEBUG
         self.dbg("[BLUR] disk-reused=\(reusedFromDisk.count) compute=\(toCompute.count) total=\(photos.count)")
+        #endif
         guard !toCompute.isEmpty else {
             self.persistBlurScores(mtimeOf: mtimeOf)  // 全命中：存盘即返回
             return
