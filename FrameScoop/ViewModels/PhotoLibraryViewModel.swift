@@ -681,10 +681,11 @@ final class PhotoLibraryViewModel: ObservableObject {
         selectedPhotoIDs.removeAll()
     }
 
-    /// 反选：当前显示图片中，已选变未选、未选变已选
+    /// 反选：当前显示图片中，已选变未选、未选变已选。
+    /// 用对称差：非显示区域的已选项保留不变（仅翻转显示集合内的选中态）。
     func invertSelection() {
         let displayedIDs = Set(displayedPhotos.map(\.id))
-        selectedPhotoIDs = displayedIDs.subtracting(selectedPhotoIDs)
+        selectedPhotoIDs = selectedPhotoIDs.symmetricDifference(displayedIDs)
     }
 
     /// 选中并打开图片到详情窗口。
