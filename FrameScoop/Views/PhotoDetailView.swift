@@ -164,7 +164,7 @@ struct PhotoDetailView: View {
             if library.selectedPhotoIDs.contains(photo.id) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 30))
-                    .foregroundStyle(.white, .tint)
+                    .foregroundStyle(.white, Color.accentColor)
                     .shadow(radius: 1)
             }
             Button {
