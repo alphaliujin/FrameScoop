@@ -214,6 +214,10 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published var showsEyeClosedOnly: Bool = false {
         didSet { rebuildDisplayedPhotos() }
     }
+    /// 仅显示选中的照片
+    @Published var showsSelectedOnly: Bool = false {
+        didSet { rebuildDisplayedPhotos() }
+    }
     /// 所有人脸都闭眼 -> 标红 eye.slash
     @Published private(set) var closedEyePhotoIDs: Set<String> = []
     /// 有睁有闭 -> 标黄 eye.slash
@@ -667,6 +671,22 @@ final class PhotoLibraryViewModel: ObservableObject {
         selectedPhotoIDs = [photo.id]
     }
 
+    /// 全选当前显示的图片（displayedPhotos，已受筛选/排序影响）
+    func selectAll() {
+        selectedPhotoIDs = Set(displayedPhotos.map(\.id))
+    }
+
+    /// 全不选
+    func deselectAll() {
+        selectedPhotoIDs.removeAll()
+    }
+
+    /// 反选：当前显示图片中，已选变未选、未选变已选
+    func invertSelection() {
+        let displayedIDs = Set(displayedPhotos.map(\.id))
+        selectedPhotoIDs = displayedIDs.subtracting(selectedPhotoIDs)
+    }
+
     /// 选中并打开图片到详情窗口。
     /// 由调用方（视图，持有 openWindow 环境）负责随后 openWindow(id: "photo-detail")。
     func openPhoto(_ photo: PhotoItem) {
@@ -993,12 +1013,17 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 覆盖连拍分组布局，统一用普通 FlowLayout 展示。
         let blurOnly = showsBlurOnly
         let eyeOnly = showsEyeClosedOnly
-        displayedPhotos = (blurOnly || eyeOnly)
+        var result = (blurOnly || eyeOnly)
             ? base.filter {
                 (!blurOnly || blurryPhotoIDs.contains($0.id) || partialBlurryPhotoIDs.contains($0.id))
                 && (!eyeOnly || closedEyePhotoIDs.contains($0.id) || partialClosedEyePhotoIDs.contains($0.id))
             }
             : base
+        // 只显示选中
+        if showsSelectedOnly {
+            result = result.filter { selectedPhotoIDs.contains($0.id) }
+        }
+        displayedPhotos = result
     }
 
     /// 同 ID 集合的两批照片中，是否有任意一张的修改时间发生变化（原地修改信号）。

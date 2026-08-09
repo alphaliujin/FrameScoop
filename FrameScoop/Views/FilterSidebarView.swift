@@ -31,6 +31,13 @@ struct FilterSidebarView: View {
                         .help("与人脸筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；左上角标红/黄 eye.slash")
                 }
 
+                if !library.selectedPhotoIDs.isEmpty {
+                    Section("选择") {
+                        Toggle("只显示选中", isOn: $library.showsSelectedOnly)
+                            .help("仅显示已选中的 \(library.selectedPhotoIDs.count) 张图片")
+                    }
+                }
+
                 if library.showsBurstFilter {
                     Section("连拍判定") {
                         Stepper("相似度阈值：\(library.burstSimilarityThreshold)",
@@ -72,20 +79,20 @@ struct FilterSidebarView: View {
             }
             .formStyle(.grouped)
 
-            // 连拍整理：开启连拍筛选时（默认仅显示连拍组）在边栏最底部呈现操作按钮
-            if library.showsBurstFilter {
+            // 选中图片时显示「删除选中」按钮
+            if !library.selectedPhotoIDs.isEmpty {
                 Divider()
                 VStack(spacing: 8) {
-                    HStack(spacing: 10) {
-                        Button(role: .destructive) {
-                            library.trashSelectedPhotos()
-                        } label: {
-                            Label("删除选中", systemImage: "trash")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(library.selectedPhotoIDs.isEmpty)
+                    Button(role: .destructive) {
+                        library.trashSelectedPhotos()
+                    } label: {
+                        Label("删除选中（\(library.selectedPhotoIDs.count) 张）", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
 
+                    // 连拍筛选开启时额外提供「保留选中」
+                    if library.showsBurstFilter {
                         Button {
                             showKeepConfirm = true
                         } label: {
@@ -93,12 +100,13 @@ struct FilterSidebarView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(library.selectedPhotoIDs.isEmpty || keepDeleteCount == 0)
+                        .disabled(keepDeleteCount == 0)
+
+                        Text("「保留选中」删除未选中的连拍照片（约 \(keepDeleteCount) 张），移到废纸篓可恢复")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Text("「保留选中」删除未选中的连拍照片（约 \(keepDeleteCount) 张），移到废纸篓可恢复")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(12)
             }

@@ -163,6 +163,19 @@ struct PhotoGridView: View {
                 Label("刷新", systemImage: "arrow.clockwise")
             }
 
+            // 全选 / 全不选 / 反选
+            if !library.photos.isEmpty {
+                Menu {
+                    Button("全选") { library.selectAll() }
+                    Button("全不选") { library.deselectAll() }
+                    Divider()
+                    Button("反选") { library.invertSelection() }
+                } label: {
+                    Label("选择", systemImage: "checklist")
+                }
+                .help("全选 / 全不选 / 反选")
+            }
+
             // 选中图片时显示「发送」菜单（右上角）
             if !library.selectedPhotoIDs.isEmpty {
                 Menu {
