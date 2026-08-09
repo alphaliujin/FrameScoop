@@ -153,7 +153,7 @@ final class ThumbnailCacheService {
         }
         if shouldPrune {
             Task.detached(priority: .background) { [dir] in
-                Self.pruneDiskCache(dir: dir, maxFiles: 2000)
+                Self.pruneDiskCache(dir: dir, maxFiles: 20000)
             }
         }
     }
