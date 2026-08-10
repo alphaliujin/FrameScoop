@@ -39,7 +39,13 @@ enum PhotoLoader {
         switch item.sourceKind {
         case .folder:
             guard let url = item.url else { return nil }
-            return ThumbnailGenerator.generate(url: url, maxPixel: 2560)
+            // 同 thumbnail：ImageIO 降采样是同步阻塞调用，挪到 GCD 线程执行，
+            // 避免占满协作池线程（详见 thumbnail 的注释）。
+            return await withCheckedContinuation { cont in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    cont.resume(returning: ThumbnailGenerator.generate(url: url, maxPixel: 2560))
+                }
+            }
         case .photoLibrary:
             guard let id = item.assetIdentifier else { return nil }
             return await PhotosLibraryService.shared.image(for: id, maxPixel: 2560)

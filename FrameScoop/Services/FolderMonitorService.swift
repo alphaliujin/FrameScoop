@@ -34,7 +34,9 @@ final class FolderMonitorService {
         stop()
 
         // 通过 context.info 把 self 传给 C 回调（@convention(c) 闭包不能捕获上下文）。
-        // Unmanaged unretained：stream 生命周期由本对象管理（deinit 调 stop 释放），不会悬空。
+        // Unmanaged unretained：context 不持留 self（避免 self->stream->self 循环引用）；
+        // 回调内对 self 做跨 main 异步的 retain/release（见下方），防止 stop()/deinit
+        // 与在途 main 块之间的悬空解引用。
         var context = FSEventStreamContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
@@ -45,12 +47,17 @@ final class FolderMonitorService {
 
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             guard let info else { return }
-            // 派发到主线程执行防抖：与 stop()（主线程）串行访问 debounceWork，
-            // 消除回调队列与主线程并发修改的数据竞争。
+            // 跨 main 异步持有 self：info 是 unretained 裸指针，若 stop()/deinit 在本回调
+            //（monitorQueue）与下方 main 块之间执行，takeUnretainedValue 会解引用已释放内存
+            //（use-after-free）。这里 retain 一次、main 块末尾 release，保证 main 块执行期间对象存活。
+            //（callback 触发时 stream 仍存活，而 stream 由 self 持有，故 self 此时必然存活，retain 安全。）
+            let instance = Unmanaged<FolderMonitorService>.fromOpaque(info).retain().takeUnretainedValue()
             DispatchQueue.main.async {
-                Unmanaged<FolderMonitorService>.fromOpaque(info)
-                    .takeUnretainedValue()
-                    .scheduleDebouncedCallback()
+                // 派发到主线程执行防抖：与 stop()（主线程）串行访问 debounceWork，
+                // 消除回调队列与主线程并发修改的数据竞争。
+                instance.scheduleDebouncedCallback()
+                // 释放回调中的 retain：若此时已是最后持有，对象在此之后才析构
+                Unmanaged.passUnretained(instance).release()
             }
         }
 

@@ -35,9 +35,11 @@ struct SettingsView: View {
             Section("缓存") {
                 Button("清除缩略图缓存") {
                     clearing = true
-                    Task.detached { @MainActor in
+                    // clearCache 会删除整个磁盘缓存目录（可能上千文件），必须在后台执行；
+                    // 原先 Task.detached { @MainActor in ... } 的 @MainActor 跳回主线程，反而卡 UI。
+                    Task.detached(priority: .userInitiated) {
                         ThumbnailCacheService.shared.clearCache()
-                        clearing = false
+                        await MainActor.run { clearing = false }
                     }
                 }
                 .disabled(clearing)

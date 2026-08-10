@@ -23,7 +23,8 @@ struct FrameScoopApp: App {
                 .onOpenURL { url in
                     // 支持将文件夹拖入 Dock 图标或经 Finder「打开方式」直接加入侧边栏
                     //（Info.plist 中 CFBundleDocumentTypes 声明了 public.folder 文档类型）
-                    if url.hasDirectoryPath {
+                    // 仅接受本地文件夹 URL（排除 smb:// 等非文件协议，避免建书签失败报错误导）
+                    if url.isFileURL, url.hasDirectoryPath {
                         library.addRootURL(url)
                     }
                 }

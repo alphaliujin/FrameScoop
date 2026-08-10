@@ -42,6 +42,26 @@ final class ThumbnailCacheService {
     /// 在途任务去重器（actor 保证并发安全，无需手动加锁）
     private let inFlight = InFlightTracker()
 
+    /// 清空缓存的代际号：clearCache 递增，在途生成任务据此丢弃过期写回（避免清空后被在途任务回填）。
+    private let epochLock = NSLock()
+    private var generationEpoch = 0
+
+    private func currentEpoch() -> Int {
+        epochLock.lock(); defer { epochLock.unlock() }
+        return generationEpoch
+    }
+
+    /// 把图片放入内存缓存，按解码后像素数估算 cost（让 totalCostLimit 真正生效）。
+    private func cache(_ image: NSImage, forKey key: String) {
+        let pixels: Int
+        if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            pixels = cg.width * cg.height
+        } else {
+            pixels = Int(image.size.width * image.size.height)
+        }
+        memoryCache.setObject(image, forKey: key as NSString, cost: max(1, pixels * 4))
+    }
+
     /// 磁盘清理节流计数器：每 pruneThreshold 次写入才触发一次 pruneDiskCache
     private static let pruneCounterQueue = DispatchQueue(label: "framescoop.prune-counter")
     private nonisolated(unsafe) static var writesSincePrune = 0
@@ -59,7 +79,7 @@ final class ThumbnailCacheService {
                 return (key, cached)
             }
             if let disk = self.readFromDisk(key: key, dir: self.diskCacheDir) {
-                self.memoryCache.setObject(disk, forKey: key as NSString)
+                self.cache(disk, forKey: key)
                 return (key, disk)
             }
             return (key, nil)
@@ -69,10 +89,13 @@ final class ThumbnailCacheService {
         // 2. 未命中：去重 + 后台生成（原子 get-or-create，避免并发重复生成）
         let task = await inFlight.getOrCreate(key) { [diskCacheDir] in
             Task.detached(priority: .userInitiated) { [weak self] in
+                let epoch = self?.currentEpoch() ?? 0
                 let image = await PhotoLoader.thumbnail(for: item, maxPixel: maxPixel)
-                if let image {
-                    self?.memoryCache.setObject(image, forKey: key as NSString)
-                    self?.writeToDisk(image: image, key: key, dir: diskCacheDir)
+                // 仍把图返回给调用方（cell 能显示）；但若期间用户清了缓存（代际号变了），
+                // 不回填内存/磁盘，避免「清除缓存」后被在途生成任务写回。
+                if let image, let self, epoch == self.currentEpoch() {
+                    self.cache(image, forKey: key)
+                    self.writeToDisk(image: image, key: key, dir: diskCacheDir)
                 }
                 return image
             }
@@ -85,6 +108,8 @@ final class ThumbnailCacheService {
 
     /// 清空所有缓存（设置中可调用）
     func clearCache() {
+        // 递增代际号：在途生成任务据此丢弃过期写回，避免清空后被回填。
+        epochLock.lock(); generationEpoch += 1; epochLock.unlock()
         memoryCache.removeAllObjects()
         try? FileManager.default.removeItem(at: diskCacheDir)
         try? FileManager.default.createDirectory(at: diskCacheDir, withIntermediateDirectories: true)

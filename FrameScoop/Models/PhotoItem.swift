@@ -91,7 +91,7 @@ struct PhotoItem: Identifiable, Hashable, Codable, Sendable {
 
     /// 图片宽高比；无尺寸信息时回退为 1（正方形）
     var aspectRatio: CGFloat {
-        guard pixelHeight > 0 else { return 1 }
+        guard pixelWidth > 0, pixelHeight > 0 else { return 1 }
         return CGFloat(pixelWidth) / CGFloat(pixelHeight)
     }
 

@@ -133,16 +133,16 @@ struct PhotoDetailView: View {
                     }
                     .onEnded { _ in lastOffset = offset }
             )
+            .onTapGesture(count: 2) {
+                // 双击切换缩放（高 count 须先注册，否则双击会被识别成两次单击）
+                if scale > 1 { resetTransform() }
+                else { scale = 2; lastScale = 2 }
+            }
             .onTapGesture(count: 1) {
                 // 信息面板打开时，单击图片任意位置关闭面板
                 if library.showsInfoPanel {
                     withAnimation { library.showsInfoPanel = false }
                 }
-            }
-            .onTapGesture(count: 2) {
-                // 双击切换缩放
-                if scale > 1 { resetTransform() }
-                else { scale = 2; lastScale = 2 }
             }
     }
 
@@ -236,6 +236,10 @@ struct PhotoDetailView: View {
             .onChange(of: photo.id) { _, _ in
                 withAnimation { proxy.scrollTo(photo.id, anchor: .center) }
             }
+            .onAppear {
+                // 初次出现也滚动到当前图（onChange 仅在 photo.id 变化时触发，首次不触发）
+                proxy.scrollTo(photo.id, anchor: .center)
+            }
         }
     }
 
@@ -254,14 +258,13 @@ struct PhotoDetailView: View {
     private func loadImageAndMetadata() async {
         resetTransform()
         let photo = self.photo
-        // 并发加载大图与元数据，缩短等待
-        // 大图经 PhotoLoader 分派（folder->CGImageSource 降采样，photoLibrary->PHImageManager），
-        // 后台线程解码避免阻塞 UI；元数据按源分派（folder->mdls，photoLibrary->PHAsset）
-        let imageTask = Task.detached(priority: .userInitiated) { () -> NSImage? in
-            await PhotoLoader.fullImage(for: photo)
-        }
+        // 先清旧图：避免切图时上一张大图残留到新图加载完（标题栏已是新名）
+        image = nil
+        // 并发加载大图与元数据。用 async let（结构化）而非 Task.detached：父 .task(id: photo.id)
+        // 取消时自动级联取消未完成的大图解码，避免快速翻图堆积未取消的解码任务。
+        async let imgTask = PhotoLoader.fullImage(for: photo)
         async let meta = library.loadMetadata(for: photo)
-        let (img, md) = await (imageTask.value, meta)
+        let (img, md) = await (imgTask, meta)
         // 校验任务未取消（用户已切到下一张）：避免旧图加载完成后短暂覆盖新图
         guard !Task.isCancelled else { return }
         image = img

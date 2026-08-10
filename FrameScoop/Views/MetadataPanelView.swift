@@ -19,8 +19,8 @@ struct MetadataPanelView: View {
                 section(title: "文件信息") {
                     row("文件名", photo.name)
                     row("大小", photo.formattedSize)
-                    if let w = metadata.pixelWidth {
-                        row("尺寸", "\(w) × \(metadata.pixelHeight ?? 0)")
+                    if let w = metadata.pixelWidth, let h = metadata.pixelHeight {
+                        row("尺寸", "\(w) × \(h)")
                     }
                     if let colorSpace = metadata.colorSpace { row("色彩空间", colorSpace) }
                     if let depth = metadata.depth { row("位深", "\(depth) 位") }

@@ -31,6 +31,9 @@ final class PhotosLibraryService {
     /// 照片库源在侧边栏的固定节点 id（与文件夹节点 id 不会冲突）
     static let sidebarNodeID = "frameScoop.photosLibrary"
 
+    /// 取图超时：iCloud 未下载项可能长时间不回调，超时后取消请求并以 nil 恢复，避免续体永不恢复。
+    private static let imageRequestTimeout: TimeInterval = 60
+
     private init() {}
 
     // MARK: - 鉴权
@@ -104,13 +107,19 @@ final class PhotosLibraryService {
                 resumed = true
                 cont.resume(returning: img)
             }
-            PHImageManager.default().requestImage(
+            let requestID = PHImageManager.default().requestImage(
                 for: asset,
                 targetSize: target,
                 contentMode: .aspectFit,
                 options: opts
             ) { image, _ in
                 safeResume(image)
+            }
+            // iCloud 下载可能长时间不回调（网络卡住），设超时避免续体永不恢复、详情页永远卡在加载。
+            // 超时后取消请求并以 nil 恢复；迟到的回调经 safeResume 去重为 no-op。
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.imageRequestTimeout) {
+                PHImageManager.default().cancelImageRequest(requestID)
+                safeResume(nil)
             }
         }
     }

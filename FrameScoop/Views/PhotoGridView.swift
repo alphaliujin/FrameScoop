@@ -116,7 +116,10 @@ struct PhotoGridView: View {
     var onTrash: () -> Void
 
     static func == (lhs: GridCell, rhs: GridCell) -> Bool {
-        lhs.photo.id == rhs.photo.id
+        // 比较整个 photo（含 pixelWidth/Height->aspectRatio、modificationDate）而非仅 id：
+        // 文件被原地编辑（同路径、尺寸或 mtime 变）触发监控 reload 后，新 PhotoItem 与旧的同 id
+        // 但属性不同；仅比 id 会让 .equatable() 跳过 body，导致 cell 宽度与缩略图陈旧。
+        lhs.photo == rhs.photo
         && lhs.isSelected == rhs.isSelected
         && lhs.thumbnailSize == rhs.thumbnailSize
         && lhs.badgeNumber == rhs.badgeNumber

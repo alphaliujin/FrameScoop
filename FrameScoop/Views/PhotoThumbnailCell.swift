@@ -57,7 +57,8 @@ struct PhotoThumbnailCell: View {
                 .fill(Color.white.opacity(isHovering ? 0.08 : 0))
         )
         .onHover { isHovering = $0 }
-        .task(id: "\(photo.id)-\(thumbnailSize)") {
+        // id 含 modificationDate：文件原地编辑（同路径 mtime 变）后重新取缩略图，避免显示陈旧图。
+        .task(id: "\(photo.id)-\(thumbnailSize)-\(photo.modificationDate?.timeIntervalSince1970 ?? 0)") {
             await loadThumbnail()
         }
     }

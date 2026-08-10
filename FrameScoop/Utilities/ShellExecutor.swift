@@ -71,10 +71,12 @@ final class ShellExecutor: Sendable {
         }
 
         // 2. 超时看门狗：到点若仍在运行则 terminate
+        // timedOut 在全局队列（看门狗）写、本线程读，用锁同步避免数据竞争。
+        let timedOutLock = NSLock()
         var timedOut = false
         let watchdog = DispatchWorkItem { [weak process] in
             guard let process, process.isRunning else { return }
-            timedOut = true
+            timedOutLock.lock(); timedOut = true; timedOutLock.unlock()
             process.terminate()
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
@@ -96,10 +98,11 @@ final class ShellExecutor: Sendable {
         let stdout = String(data: stdoutCollector.wait(), encoding: .utf8) ?? ""
         let stderr = String(data: stderrCollector.wait(), encoding: .utf8) ?? ""
 
+        timedOutLock.lock(); let didTimeOut = timedOut; timedOutLock.unlock()
         return ShellResult(stdout: stdout,
                            stderr: stderr,
                            terminationStatus: process.terminationStatus,
-                           didTimeOut: timedOut)
+                           didTimeOut: didTimeOut)
     }
 }
 

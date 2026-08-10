@@ -899,7 +899,7 @@ final class PhotoLibraryViewModel: ObservableObject {
         // 用户选择的目标目录需激活安全作用域以写入（安全作用域为进程级，跨线程有效）；
         // 在导出任务完成后于主线程停止，避免提前停止导致后续写入失败。
         let started = dest.startAccessingSecurityScopedResource()
-        Task.detached { [weak self] in
+        Task.detached {
             var successCount = 0
             var failedCount = 0
             var lastError: String?
@@ -928,7 +928,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                     ? "已导出 \(successCount) 张，\(failedCount) 张失败：\(lastError ?? "")"
                     : "导出失败：\(lastError ?? "")")
                 : nil
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 if started { dest.stopAccessingSecurityScopedResource() }
                 if let msg { self?.errorMessage = msg }
             }
@@ -957,7 +957,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     func copySelectionToClipboard() {
         let items = selectedItems
         guard !items.isEmpty else { return }
-        Task.detached { [weak self] in
+        Task.detached {
             let folderURLs = items.filter { $0.sourceKind == .folder }.compactMap { $0.url }
             // 单张时额外把图片本身放上剪贴板，便于粘贴到聊天/编辑器
             let single = items.count == 1 ? items.first : nil
@@ -1180,10 +1180,14 @@ final class PhotoLibraryViewModel: ObservableObject {
                     await MainActor.run { [weak self] in self?.mergePrecomputeBatch(dhashes: d, blurs: b, doneDelta: dd, token: token) }
                 }
             }
-            // 全部完成：关进度 + 存盘（token 不匹配=已切文件夹，丢弃）
+            // 全部完成：关进度 + 收尾重排 + 存盘（token 不匹配=已切文件夹，丢弃）
             await MainActor.run { [weak self] in
                 guard let self, token == self.precomputeToken else { return }
                 self.isPrecomputing = false
+                // 收尾重排：mergePrecomputeBatch 仅在每 128 张存盘点重排，末批的贡献已并入内存缓存
+                // 却未反映到 burstSegments/displayedPhotos；不补则开筛选时网格漏掉末批照片。
+                if self.showsBurstFilter { self.regroupBursts() }
+                else if self.showsBlurFilter || self.showsEyeClosedFilter { self.regroupBlurry() }
                 self.persistPrecompute()
             }
         }

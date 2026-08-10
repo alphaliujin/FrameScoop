@@ -14,12 +14,10 @@ struct FilterSidebarView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
     @State private var showKeepConfirm = false
 
-    /// 「保留选中」将删除的未选中连拍照片数量（仅本组有被选中的连拍组）
-    private var keepDeleteCount: Int {
-        library.keepSelectedDeleteCount
-    }
-
     var body: some View {
+        // 「保留选中」将删除的未选中连拍照片数量（仅本组有被选中的连拍组）。
+        // 绑一次 local，避免下面 4 处引用各算一遍（每次遍历 burstSegments）。
+        let keepDeleteCount = library.keepSelectedDeleteCount
         VStack(spacing: 0) {
             Form {
                 Section("智能筛选") {

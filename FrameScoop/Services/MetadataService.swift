@@ -91,6 +91,11 @@ struct MetadataService {
 
     /// 把曝光秒数格式化为人类可读的快门速度
     private func formatExposureTime(seconds: Double) -> String {
+        // 0 / 负 / NaN / 无穷：mdls 对编辑过/导出的图片可能返回 0 或异常值；
+        // 1.0/0 = .infinity，Int(.infinity.rounded()) 会触发陷阱崩溃，需先挡住。
+        guard seconds > 0, seconds.isFinite else {
+            return String(format: "%.3f s", seconds)
+        }
         if seconds >= 1 {
             return String(format: "%.1f s", seconds)
         }

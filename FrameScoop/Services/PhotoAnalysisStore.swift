@@ -91,7 +91,8 @@ enum PhotoAnalysisStore {
         }
         let store = Store(version: version, entries: enc)
         guard let data = try? JSONEncoder().encode(store) else { return }
-        try? data.write(to: url, options: .atomic)
+        // 仅当磁盘写入成功才更新内存缓存，保证缓存与磁盘一致（写失败时缓存仍反映上次成功落盘的状态）。
+        guard (try? data.write(to: url, options: .atomic)) != nil else { return }
 
         cacheLock.lock()
         memoryCache = entries
