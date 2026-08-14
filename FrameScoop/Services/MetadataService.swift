@@ -39,6 +39,10 @@ struct MetadataService {
         //    在 GCD 全局队列执行阻塞调用（而非 Task.detached 协作线程池）：
         //    waitUntilExit 最长阻塞 8s，占用协作 worker 会饿死协作任务；GCD 队列可独立扩容线程，
         //    通过 continuation 桥接回 async。
+        //
+        //    不用 -raw：-raw 多属性输出是 NUL 分隔、按属性名字母序（与请求顺序无关），
+        //    旧版按 "\n" 切分 + 按请求顺序取行的解析完全错位。key = value 格式自描述、
+        //    与属性顺序无关，解析最稳妥。
         let result = await withCheckedContinuation { (continuation: CheckedContinuation<ShellResult, Never>) in
             DispatchQueue.global(qos: .utility).async { [shell] in
                 let res = shell.run(
@@ -46,12 +50,12 @@ struct MetadataService {
                     arguments: [
                         "-name", "kMDItemAcquisitionMake",
                         "-name", "kMDItemAcquisitionModel",
+                        "-name", "kMDItemLensModel",
                         "-name", "kMDItemFocalLength",
                         "-name", "kMDItemFNumber",
                         "-name", "kMDItemISOSpeed",
                         "-name", "kMDItemExposureTimeSeconds",
                         "-name", "kMDItemContentCreationDate",
-                        "-raw",
                         url.path
                     ],
                     timeout: 8
@@ -67,24 +71,32 @@ struct MetadataService {
             return meta
         }
 
-        // mdls -raw 多属性时按行输出，按请求顺序对应
-        let lines = result.stdout.split(separator: "\n", omittingEmptySubsequences: false)
-        func line(_ i: Int) -> String? {
-            guard i < lines.count else { return nil }
-            let s = String(lines[i]).trimmingCharacters(in: .whitespaces)
-            return (s.isEmpty || s == "(null)") ? nil : s
+        // mdls 非 -raw 输出为「kMDItemXxx = 值」逐行（属性名字母序）；解析进字典后按键取值。
+        // 值为 "(null)" 的属性跳过；字符串值带双引号（如 "Canon"），去掉首尾引号。
+        var values: [String: String] = [:]
+        for rawLine in result.stdout.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard let eq = line.firstIndex(of: "=") else { continue }
+            let key = String(line[..<eq]).trimmingCharacters(in: .whitespaces)
+            var value = String(line[line.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
+            if value == "(null)" { continue }
+            if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
+                value = String(value.dropFirst().dropLast())
+            }
+            if !value.isEmpty { values[key] = value }
         }
 
-        meta.cameraMake = line(0)
-        meta.cameraModel = line(1)
-        meta.focalLength = line(2).flatMap { Double($0) }
-        meta.fNumber = line(3).flatMap { Double($0) }
-        meta.isoSpeed = line(4).flatMap { Int($0) }
-        if let expSec = line(5).flatMap({ Double($0) }) {
+        meta.cameraMake = values["kMDItemAcquisitionMake"]
+        meta.cameraModel = values["kMDItemAcquisitionModel"]
+        meta.lensModel = values["kMDItemLensModel"]
+        meta.focalLength = values["kMDItemFocalLength"].flatMap { Double($0) }
+        meta.fNumber = values["kMDItemFNumber"].flatMap { Double($0) }
+        meta.isoSpeed = values["kMDItemISOSpeed"].flatMap { Int($0) }
+        if let expSec = values["kMDItemExposureTimeSeconds"].flatMap({ Double($0) }) {
             // 把秒数格式化为 “1/250 s” 或 “0.5 s”
             meta.exposureTime = formatExposureTime(seconds: expSec)
         }
-        meta.takenDate = line(6)
+        meta.takenDate = values["kMDItemContentCreationDate"]
 
         return meta
     }

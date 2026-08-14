@@ -819,11 +819,19 @@ final class PhotoLibraryViewModel: ObservableObject {
                 if !ok { failed += photoIDs.count }
             }
             guard let self else { return }
-            // 刷新被删图片所在的文件夹（非当前选中文件夹时仅刷新文件监控触发的 reload）
+            // 刷新被删图片所在的文件夹：仅当用户仍停留在该源时才刷新。
+            // 异步删除期间用户可能已切换到其他文件夹，此时 loadPhotos(from:) 会递增
+            // loadToken 并抢占为新源，把新选中文件夹的内容覆盖成旧文件夹的；
+            // loadPhotosLibrary() 同理会把网格切成照片库。切走的情况下跳过刷新：
+            // 用户重新选中该文件夹时会全新加载，删除结果不会遗漏。
             if needPhotosLibraryReload {
-                self.loadPhotosLibrary()
+                if self.selectedNode?.isPhotosLibrary == true {
+                    self.loadPhotosLibrary()
+                }
             } else if let folderReloadURL {
-                self.loadPhotos(from: folderReloadURL)
+                if self.selectedNode?.url?.path == folderReloadURL.path {
+                    self.loadPhotos(from: folderReloadURL)
+                }
             } else {
                 self.reloadCurrentFolder()
             }
