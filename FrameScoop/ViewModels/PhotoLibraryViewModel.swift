@@ -973,7 +973,10 @@ final class PhotoLibraryViewModel: ObservableObject {
             if let item = single {
                 switch item.sourceKind {
                 case .folder:
-                    fetched = item.url.flatMap { NSImage(contentsOf: $0) }
+                    // 用 2560px 降采样图而非 NSImage(contentsOf:) 全量解码原图：
+                    // RAW/HEIC 原图全解码可达 100-500MB 峰值，剪贴板场景无需原图分辨率
+                    //（经 PhotoLoader 复用大图并发限制器，不会叠加解码峰值）。
+                    fetched = await PhotoLoader.fullImage(for: item)
                 case .photoLibrary:
                     if let id = item.assetIdentifier {
                         fetched = await PhotosLibraryService.shared.image(for: id, maxPixel: 2048)

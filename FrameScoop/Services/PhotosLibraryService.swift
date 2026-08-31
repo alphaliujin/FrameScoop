@@ -91,12 +91,14 @@ final class PhotosLibraryService {
     /// 请求图片，maxPixel 控制最长边像素上限。iCloud 未下载项按需联网下载。
     /// 用 deliveryMode=.highQualityFormat 取单次高质量回调，避免 opportunistic 的 degraded
     /// 多回调导致 CheckedContinuation 重复 resume；仍加锁防极端多次回调。
+    /// resizeMode=.exact：Photos 按 targetSize 精确缩放返回，不会像 .fast 那样可能返回
+    /// 比目标大得多的全尺寸解码图（4000×3000 原图 ≈ 48MB/张），把内存峰值控制在预算内。
     func image(for localIdentifier: String, maxPixel: Int) async -> NSImage? {
         guard let asset = fetchAsset(localIdentifier) else { return nil }
         let opts = PHImageRequestOptions()
         opts.isNetworkAccessAllowed = true
         opts.deliveryMode = .highQualityFormat
-        opts.resizeMode = .fast
+        opts.resizeMode = .exact
         let target = targetSize(for: asset, maxPixel: maxPixel)
         return await withCheckedContinuation { (cont: CheckedContinuation<NSImage?, Never>) in
             var resumed = false

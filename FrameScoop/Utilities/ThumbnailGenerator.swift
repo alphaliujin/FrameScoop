@@ -51,15 +51,29 @@ enum ThumbnailGenerator {
             return NSImage(cgImage: cgImage, size: size)
         }
 
-        // 4. 回退：少数图片 CG 缩略图接口失败但 NSImage 仍可解码，用 NSImage 解码并缩放
-        return nsImageFallback(url: url, maxPixel: maxPixel)
+        // 4. 回退：少数图片 CG 缩略图接口失败但仍可解码，复用同一 source 直读解码并缩放
+        return nsImageFallback(source: source, maxPixel: maxPixel)
     }
 
     /// NSImage 回退缩略图：CGImageSource 缩略图接口失败时使用。
-    /// 使用 CoreGraphics 绘制（线程安全，可在后台任务中调用），避免 NSImage.lockFocus 仅适合主线程的问题。
-    private static func nsImageFallback(url: URL, maxPixel: Int) -> NSImage? {
-        guard let image = NSImage(contentsOf: url),
-              let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    /// 用 CGImageSourceCreateImageAtIndex 直读解码（而非 NSImage(contentsOf:)——后者会持有
+    /// CGImage 与多份位图表示，内存约为像素数据的 2 倍），解码后立即绘制到缩小后的
+    /// CGContext 并丢弃原图。CoreGraphics 绘制线程安全，可在后台任务中调用。
+    /// 超大图（像素数 > 16MP）直接放弃回退：全量解码 RGBA 会超过 64MB，可能把整应用
+    /// 内存峰值推出预算（目标 ≤200MB）；此类图片走主缩略图路径（JPEG 预览嵌入的 RAW
+    /// 等可正常降采样），此处仅兜底少数损坏/占位文件。
+    private static func nsImageFallback(source: CGImageSource, maxPixel: Int) -> NSImage? {
+        // 超大图保护：全量解码前先读像素尺寸，超过 16MP 即放弃
+        if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let w = props[kCGImagePropertyPixelWidth] as? Int,
+           let h = props[kCGImagePropertyPixelHeight] as? Int,
+           w > 0, h > 0,
+           w * h > 16 * 1024 * 1024 {
+            return nil
+        }
+        guard let cg = CGImageSourceCreateImageAtIndex(
+            source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+        ) else { return nil }
         let w = cg.width, h = cg.height
         guard w > 0, h > 0 else { return nil }
         // 等比缩放，最长边不超过 maxPixel

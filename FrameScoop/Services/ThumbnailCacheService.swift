@@ -22,11 +22,15 @@ final class ThumbnailCacheService {
 
     static let shared = ThumbnailCacheService()
 
-    /// 内存缓存：key 为 "URL|size|meta" 的稳定字符串
+    /// 内存缓存：key 为 "URL|size|meta" 的稳定字符串。
+    /// 内存预算：48MB（countLimit 200 为次上限）。整应用内存目标 ≤200MB，
+    /// 实测 4.5K Retina 下窗口合成（CG raster + IOSurface）约 90MB、AppKit/SwiftUI
+    /// 堆基线约 70-100MB，缓存只能留 48MB；滚动时超出部分由磁盘缓存（JPEG 解码
+    /// 数毫秒/张）兜底，换回约 30MB 的稳定内存盈余。
     private let memoryCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 500
-        cache.totalCostLimit = 128 * 1024 * 1024  // 128MB
+        cache.countLimit = 200
+        cache.totalCostLimit = 48 * 1024 * 1024  // 48MB
         return cache
     }()
 
