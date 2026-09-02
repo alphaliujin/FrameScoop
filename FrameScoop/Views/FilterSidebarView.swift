@@ -134,11 +134,11 @@ struct FilterSidebarView: View {
                 .frame(height: 30)          // ≈ 原图标记占比 18%(实测裁剪 119×63)
                 .opacity(0.55)
                 .padding(.bottom, 6)
-            Text("光影为诗，拾帧成集")
-                .font(.system(size: 13))                  // 标语置于 FrameScoop 上方,字号减小一号
-                .padding(.bottom, 3)
             Text("FrameScoop")
-                .font(.system(size: 17, weight: .bold))   // ≈ 原图字高 12%
+                .font(.system(size: 17))                  // 常规字重(不加粗),≈ 原图字高 12%
+            Spacer().frame(height: 16)                    // 空开一行
+            Text("光影为诗，拾帧成集")
+                .font(.system(size: 13))                  // 字号减小一号
                 .padding(.bottom, 2)
             Text("Version \(Self.appVersion)")
                 .font(.system(size: 9))                   // 原图约 4%,按可读性取 9
