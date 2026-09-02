@@ -124,14 +124,36 @@ struct FilterSidebarView: View {
         }
     }
 
-    /// 右边栏底部品牌图：宽度与边栏同宽，背景透明；白天/夜晚外观由 Asset Catalog 的 imageset 外观变体自动切换
+    /// 右边栏底部品牌区:图形标记(图片) + 三行文字,与原整幅品牌图视觉一致。
+    /// 文字用 .primary 自动适配明暗(原图两变体即深灰/浅灰),配合整体 opacity(0.55)。
     private var brandLogo: some View {
-        Image("BrandLogo")
-            .resizable()
-            .scaledToFit()
-            .opacity(0.55)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            Image("BrandMark")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 30)          // ≈ 原图标记占比 18%(实测裁剪 119×63)
+                .padding(.bottom, 6)
+            Text("FrameScoop")
+                .font(.system(size: 17, weight: .bold))   // ≈ 原图字高 12%
+                .padding(.bottom, 3)
+            Text("光影为诗，拾帧成集")
+                .font(.system(size: 14))                  // ≈ 原图标语占比 11%
+                .padding(.bottom, 2)
+            Text("version \(Self.appVersion)")
+                .font(.system(size: 9))                   // 原图约 4%,按可读性取 9
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.primary)
+        .opacity(0.55)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 短版本号(取 CFBundleShortVersionString 前两位组件: 1.0.0 -> "1.0")
+    private static var appVersion: String {
+        let full = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let parts = full.split(separator: ".").map(String.init)
+        return parts.count >= 2 ? parts[0] + "." + parts[1] : full
     }
 }
