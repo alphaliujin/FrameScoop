@@ -38,8 +38,10 @@ targets:
         PRODUCT_NAME: FrameScoop
         INFOPLIST_FILE: FrameScoop/Info.plist
         CODE_SIGN_ENTITLEMENTS: FrameScoop/FrameScoop.entitlements
-        # 启用 Hardened Runtime（公证必需）
-        ENABLE_HARDENED_RUNTIME: YES
+        # Hardened Runtime 关闭：Apple Development 证书 + HR 组合在 macOS 26 上会让
+        # 照片库 TCC 静默拒绝（不弹窗、不出现在系统设置列表，2026-09-02 探针实测）。
+        # 当前分发不走公证（公证需 Developer ID 证书），如将来启用公证再打开。
+        ENABLE_HARDENED_RUNTIME: NO
         # 关闭 Xcode 15 Debug Dylib Support：自签名证书无 TeamIdentifier，
         # 拆出的 FrameScoop.debug.dylib 与主二进制 Team ID 不匹配，dyld library
         # validation 拒绝加载 -> dyld abort -> SIGABRT。关掉后 Debug 直接编进主二进制。

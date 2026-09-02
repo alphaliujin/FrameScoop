@@ -53,6 +53,8 @@ ln -s /Applications "$STAGING/Applications"
 xattr -cr "$STAGING/$APP_NAME.app" 2>/dev/null || true   # 清除隔离属性
 
 # 2.5 重签为 Apple Development（注入 Team ID，使照片库 TCC 可授权）
+# 注意：勿加 --options runtime（hardened runtime）——Apple Development + HR 组合在 macOS 26
+# 上会导致照片库 TCC 静默拒绝（不弹窗、不出现在系统设置列表，2026-09-02 探针实测）。
 echo "-> 用 Apple Development 证书重签（注入 Team ID）…"
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$RELEASE_SIGN_IDENTITY"; then
   echo "✗ 找不到发布签名证书（SHA-1: ${RELEASE_SIGN_IDENTITY}）。" >&2
@@ -60,7 +62,7 @@ if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$RELEASE_SI
   echo "  通过 RELEASE_SIGN_IDENTITY 环境变量传入或更新本脚本。" >&2
   exit 1
 fi
-codesign --force --sign "$RELEASE_SIGN_IDENTITY" --options runtime \
+codesign --force --sign "$RELEASE_SIGN_IDENTITY" \
   --entitlements "$ENTITLEMENTS" "$STAGING/$APP_NAME.app"
 codesign --verify --verbose "$STAGING/$APP_NAME.app" 2>&1 | tail -2
 codesign -dvv "$STAGING/$APP_NAME.app" 2>&1 | grep -E "Authority=Apple Development|TeamIdentifier"
