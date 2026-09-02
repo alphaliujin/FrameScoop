@@ -158,6 +158,14 @@ final class GridGeometryTests: XCTestCase {
         XCTAssertEqual(frames[1].frame.origin.x, 104)
     }
 
+    func testFlowFramesKeepsRowWhenExactlyFits() {
+        // 边界回归: 3×100 + 2×4 = 308 <= 310 同行(旧规则);若多算一个尾部 spacing(312 > 310)会错误换行
+        let items = [photo("a", 1, 1), photo("b", 1, 1), photo("c", 1, 1)]
+        let frames = GridGeometry.flowFrames(items: items, rowHeight: 100, spacing: 4, availableWidth: 310)
+        XCTAssertEqual(frames.map { $0.frame.origin },
+                       [CGPoint(x: 0, y: 0), CGPoint(x: 104, y: 0), CGPoint(x: 208, y: 0)])
+    }
+
     func testFlowRowsGroupsByRow() {
         let items = [photo("a", 1, 1), photo("b", 1, 1), photo("c", 1, 1)]
         let rows = GridGeometry.flowRows(items: items, rowHeight: 100, spacing: 4, availableWidth: 300)
@@ -204,7 +212,9 @@ enum GridGeometry {
         var rowCount = 0
         for photo in items {
             let w = max(rowHeight * photo.aspectRatio, 40)
-            if availableWidth > 0, rowCount > 0, x + spacing + w > availableWidth {
+            // 旧规则等价式: currentWidth(含 k-1 个内部 spacing) + spacing + w ≡ x + w(x 为候选起点)
+            // 注意勿写成 x + spacing + w: 那会多算一个尾部 spacing,导致刚好放下的行被提前换行。
+            if availableWidth > 0, rowCount > 0, x + w > availableWidth {
                 x = 0
                 y += rowHeight + spacing
                 rowCount = 0
@@ -390,7 +400,9 @@ Expected: FAIL(`burstFrames` / `burstRows` 不存在)。
                 var burstRowCount = 0
                 for photo in group {
                     let w = cellWidth(photo)
-                    if burstRowCount > 0, burstX + spacing + w > availableWidth {
+                    // 与旧 burstRow 换行条件等价: burstWidth + spacing + w ≡ burstX + w(burstX 为候选起点);
+                    // 勿写成 burstX + spacing + w(多算尾部 spacing 会提前换行)。
+                    if burstRowCount > 0, burstX + w > availableWidth {
                         y += rowHeight + spacing
                         burstX = 0
                         burstRowCount = 0
