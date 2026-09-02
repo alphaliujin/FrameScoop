@@ -134,14 +134,13 @@ struct FilterSidebarView: View {
                 .frame(height: 30)          // ≈ 原图标记占比 18%(实测裁剪 119×63)
                 .opacity(0.55)
                 .padding(.bottom, 6)
+            Text("光影为诗，拾帧成集")
+                .font(.system(size: 13))                  // 标语置于 FrameScoop 上方,字号减小一号
+                .padding(.bottom, 3)
             Text("FrameScoop")
                 .font(.system(size: 17, weight: .bold))   // ≈ 原图字高 12%
-                .padding(.bottom, 3)
-            Text("光影为诗，拾帧成集")
-                .font(.system(size: 14))                  // ≈ 原图标语占比 11%
-                .foregroundStyle(taglineGreen)            // 深绿(品牌青色加深);深色模式用亮绿保证可读性
                 .padding(.bottom, 2)
-            Text("version \(Self.appVersion)")
+            Text("Version \(Self.appVersion)")
                 .font(.system(size: 9))                   // 原图约 4%,按可读性取 9
         }
         .foregroundStyle(.primary)
@@ -153,13 +152,5 @@ struct FilterSidebarView: View {
     /// 版本号(完整 CFBundleShortVersionString,如 "1.0.7"; 缺失时兜底 "1.0")
     private static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-    }
-
-    /// 标语行颜色: 浅色模式深绿(品牌青色 0.220/0.724/0.638 加深),深色模式亮绿同色系
-    @Environment(\.colorScheme) private var colorScheme
-    private static let taglineGreenDark = Color(red: 0.12, green: 0.40, blue: 0.35)
-    private static let taglineGreenLight = Color(red: 0.42, green: 0.78, blue: 0.66)
-    private var taglineGreen: Color {
-        colorScheme == .dark ? Self.taglineGreenLight : Self.taglineGreenDark
     }
 }
