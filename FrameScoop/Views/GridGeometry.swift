@@ -72,38 +72,51 @@ enum GridGeometry {
                 return GridPhotoFrame(photo: p, frame: CGRect(x: x, y: 0, width: w, height: rowHeight))
             }
         }
+        // 行号模型(与旧 computeRows 逐行等价): 行按发射顺序连续编号, 行 i 的 y = i*(rowHeight+spacing)。
+        // 连拍组独占行 = 关闭打开的流式行后, 组内各行按序号紧接发射 —— 组间不插空行,
+        // 组末行留白由"关闭流式行"保证(下一段单张开新行)。
+        // 注意: displayedBurstSegments 过滤掉 .single 后连续 .burst 是常态, 因此不能对每个组
+        // 先无条件 +rowHeight+spacing 再发射(会在连续组之间插幽灵空行)。
         var frames: [GridPhotoFrame] = []
-        var y: CGFloat = 0
+        var rowIndex = 0                       // 下一个待发射行的行号(= 已发射行数)
+        var flowRow: Int? = nil                // 当前打开的流式行行号(nil = 无打开的流式行)
+        var flowX: CGFloat = 0                 // 流式行下一个候选 x
+        func openFlowRow() { flowRow = rowIndex; rowIndex += 1; flowX = 0 }
         for segment in segments {
             switch segment {
             case .single(let photo):
                 let w = cellWidth(photo)
-                let continuesFlow = frames.last.map { $0.frame.minY == y } ?? false
-                var x = continuesFlow ? frames.last!.frame.maxX + spacing : 0
-                if continuesFlow, x + w > availableWidth {
-                    y += rowHeight + spacing
-                    x = 0
+                if flowRow == nil {
+                    openFlowRow()                       // 新行首张不检查换行(与旧 !flowRow.isEmpty 门一致)
+                } else if flowX + w > availableWidth {  // 旧 flowWidth + spacing + w ≡ flowX + w
+                    openFlowRow()
                 }
-                frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: x, y: y, width: w, height: rowHeight)))
+                let rowY = CGFloat(flowRow!) * (rowHeight + spacing)
+                frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: flowX, y: rowY, width: w, height: rowHeight)))
+                flowX += w + spacing
             case .burst(let group):
-                // 连拍组独占行: 组首永远新行; 组末行留白(与下一段分开)
-                if !frames.isEmpty { y += rowHeight + spacing }
+                flowRow = nil                          // 组独占行: 关闭流式行, 下一段单张将开新行
                 var burstX: CGFloat = 0
                 var burstRowCount = 0
+                var burstRowIdx = -1
                 for photo in group {
                     let w = cellWidth(photo)
-                    // 与旧 burstRow 换行条件等价: burstWidth + spacing + w ≡ burstX + w(burstX 为候选起点);
-                    // 勿写成 burstX + spacing + w(多算尾部 spacing 会提前换行)。
+                    // 与旧 burstRow 换行条件等价: burstWidth + spacing + w ≡ burstX + w(候选起点);
+                    // 勿写成 burstX + spacing + w(多算尾部 spacing 会提前换行)。行首张不检查换行。
                     if burstRowCount > 0, burstX + w > availableWidth {
-                        y += rowHeight + spacing
                         burstX = 0
                         burstRowCount = 0
+                        burstRowIdx = -1
                     }
-                    frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: burstX, y: y, width: w, height: rowHeight)))
+                    if burstRowCount == 0 {
+                        burstRowIdx = rowIndex
+                        rowIndex += 1
+                    }
+                    let rowY = CGFloat(burstRowIdx) * (rowHeight + spacing)
+                    frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: burstX, y: rowY, width: w, height: rowHeight)))
                     burstX += w + spacing
                     burstRowCount += 1
                 }
-                y += rowHeight + spacing
             }
         }
         return frames

@@ -98,4 +98,13 @@ final class GridGeometryTests: XCTestCase {
                                           rowHeight: 100, spacing: 4, availableWidth: 400)
         XCTAssertEqual(rows.map { $0.map(\.name) }, [["a.jpg"], ["b.jpg", "c.jpg"], ["d.jpg"]])
     }
+
+    func testBurstFramesConsecutiveBurstsNoPhantomGap() {
+        // 边界回归: displayedBurstSegments 过滤掉 .single 后连续 .burst 是常态;
+        // 旧布局行号连续、组间无空行。若对每个组先推进一行再发射,第二组会跑到 y=208(幽灵空行)。
+        let segs: [BurstSegment] = [.burst([photo("a", 1, 1)]), .burst([photo("b", 1, 1)])]
+        let frames = GridGeometry.burstFrames(segments: segs, cellWidth: { _ in 100 },
+                                              rowHeight: 100, spacing: 4, availableWidth: 400)
+        XCTAssertEqual(frames.map { $0.frame.origin }, [CGPoint(x: 0, y: 0), CGPoint(x: 0, y: 104)])
+    }
 }
