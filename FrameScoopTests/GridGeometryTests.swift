@@ -47,4 +47,55 @@ final class GridGeometryTests: XCTestCase {
         XCTAssertEqual(frames.map { $0.frame.origin },
                        [CGPoint(x: 0, y: 0), CGPoint(x: 104, y: 0), CGPoint(x: 208, y: 0)])
     }
+
+    // MARK: - 连拍布局
+
+    func testBurstFramesExclusiveRowsAndTrailingGap() {
+        // 单张 a + 连拍组(b,c) + 单张 d: 组独占行、组末行留白(d 不在 b,c 行尾)
+        let segs: [BurstSegment] = [
+            .single(photo("a", 1, 1)),
+            .burst([photo("b", 1, 1), photo("c", 1, 1)]),
+            .single(photo("d", 1, 1))
+        ]
+        let frames = GridGeometry.burstFrames(segments: segs, cellWidth: { _ in 100 },
+                                              rowHeight: 100, spacing: 4, availableWidth: 400)
+        XCTAssertEqual(frames.map { $0.photo.name }, ["a.jpg", "b.jpg", "c.jpg", "d.jpg"])
+        XCTAssertEqual(frames[0].frame.origin, CGPoint(x: 0, y: 0))
+        XCTAssertEqual(frames[1].frame.origin, CGPoint(x: 0, y: 104))
+        XCTAssertEqual(frames[2].frame.origin, CGPoint(x: 104, y: 104))
+        XCTAssertEqual(frames[3].frame.origin, CGPoint(x: 0, y: 208))
+    }
+
+    func testBurstFramesGroupInternalWrap() {
+        // 组内放不下时组内换行(仍独占自己的行,不接下一段)
+        let segs: [BurstSegment] = [
+            .burst([photo("b", 1, 1), photo("c", 1, 1), photo("d", 1, 1)]),
+            .single(photo("e", 1, 1))
+        ]
+        let frames = GridGeometry.burstFrames(segments: segs, cellWidth: { _ in 100 },
+                                              rowHeight: 100, spacing: 4, availableWidth: 210)
+        // b,c 同行(0,0)/(104,0);d 组内换行(0,104);e 新行(0,208)
+        XCTAssertEqual(frames.map { $0.frame.origin },
+                       [CGPoint(x: 0, y: 0), CGPoint(x: 104, y: 0),
+                        CGPoint(x: 0, y: 104), CGPoint(x: 0, y: 208)])
+    }
+
+    func testBurstFramesSinglesFlowAcrossSegments() {
+        // 连续单张段流式同行(与旧 behavior 一致)
+        let segs: [BurstSegment] = [.single(photo("a", 1, 1)), .single(photo("b", 1, 1))]
+        let frames = GridGeometry.burstFrames(segments: segs, cellWidth: { _ in 100 },
+                                              rowHeight: 100, spacing: 4, availableWidth: 400)
+        XCTAssertEqual(frames.map { $0.frame.origin }, [CGPoint(x: 0, y: 0), CGPoint(x: 104, y: 0)])
+    }
+
+    func testBurstRowsMatchesFrames() {
+        let segs: [BurstSegment] = [
+            .single(photo("a", 1, 1)),
+            .burst([photo("b", 1, 1), photo("c", 1, 1)]),
+            .single(photo("d", 1, 1))
+        ]
+        let rows = GridGeometry.burstRows(segments: segs, cellWidth: { _ in 100 },
+                                          rowHeight: 100, spacing: 4, availableWidth: 400)
+        XCTAssertEqual(rows.map { $0.map(\.name) }, [["a.jpg"], ["b.jpg", "c.jpg"], ["d.jpg"]])
+    }
 }

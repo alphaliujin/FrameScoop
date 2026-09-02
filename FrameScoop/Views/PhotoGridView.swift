@@ -338,7 +338,9 @@ private struct BurstFlowLayout<Content: View>: View {
     let content: (PhotoItem) -> Content
 
     var body: some View {
-        let rows = computeRows()
+        let rows = GridGeometry.burstRows(segments: segments, cellWidth: cellWidth,
+                                          rowHeight: rowHeight, spacing: spacing,
+                                          availableWidth: availableWidth)
         LazyVStack(alignment: .leading, spacing: spacing) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: spacing) {
@@ -346,57 +348,5 @@ private struct BurstFlowLayout<Content: View>: View {
                 }
             }
         }
-    }
-
-    private func computeRows() -> [[PhotoItem]] {
-        guard availableWidth > 0 else {
-            return [segments.flatMap { seg -> [PhotoItem] in
-                switch seg { case .single(let p): return [p]; case .burst(let ps): return ps }
-            }]
-        }
-        var rows: [[PhotoItem]] = []
-        var flowRow: [PhotoItem] = []        // 当前单张流式行
-        var flowWidth: CGFloat = 0
-
-        func flushFlow() {
-            if !flowRow.isEmpty {
-                rows.append(flowRow)
-                flowRow = []
-                flowWidth = 0
-            }
-        }
-
-        for segment in segments {
-            switch segment {
-            case .single(let photo):
-                let w = cellWidth(photo)
-                if !flowRow.isEmpty && flowWidth + spacing + w > availableWidth {
-                    flushFlow()
-                }
-                flowRow.append(photo)
-                flowWidth += w + (flowRow.count > 1 ? spacing : 0)
-
-            case .burst(let group):
-                // 连拍组独占行：先结束当前流式行，保证组首在新行行首
-                flushFlow()
-                var burstRow: [PhotoItem] = []
-                var burstWidth: CGFloat = 0
-                for photo in group {
-                    let w = cellWidth(photo)
-                    if !burstRow.isEmpty && burstWidth + spacing + w > availableWidth {
-                        rows.append(burstRow)
-                        burstRow = []
-                        burstWidth = 0
-                    }
-                    burstRow.append(photo)
-                    burstWidth += w + (burstRow.count > 1 ? spacing : 0)
-                }
-                if !burstRow.isEmpty {
-                    rows.append(burstRow)   // 末行留白：不与下一段同行
-                }
-            }
-        }
-        flushFlow()
-        return rows
     }
 }

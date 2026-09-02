@@ -56,4 +56,74 @@ enum GridGeometry {
         }
         return rows
     }
+
+    /// 连拍分段布局的 frame 计算：连拍组独占行(组内可换行、组末行留白)；单张段流式排列。
+    static func burstFrames(segments: [BurstSegment], cellWidth: (PhotoItem) -> CGFloat,
+                            rowHeight: CGFloat, spacing: CGFloat, availableWidth: CGFloat) -> [GridPhotoFrame] {
+        guard availableWidth > 0 else {
+            // 与旧行为一致: 宽度未知时全部单行
+            let photos = segments.flatMap { seg -> [PhotoItem] in
+                switch seg { case .single(let p): return [p]; case .burst(let ps): return ps }
+            }
+            var x: CGFloat = 0
+            return photos.map { p in
+                let w = cellWidth(p)
+                defer { x += w + spacing }
+                return GridPhotoFrame(photo: p, frame: CGRect(x: x, y: 0, width: w, height: rowHeight))
+            }
+        }
+        var frames: [GridPhotoFrame] = []
+        var y: CGFloat = 0
+        for segment in segments {
+            switch segment {
+            case .single(let photo):
+                let w = cellWidth(photo)
+                let continuesFlow = frames.last.map { $0.frame.minY == y } ?? false
+                var x = continuesFlow ? frames.last!.frame.maxX + spacing : 0
+                if continuesFlow, x + w > availableWidth {
+                    y += rowHeight + spacing
+                    x = 0
+                }
+                frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: x, y: y, width: w, height: rowHeight)))
+            case .burst(let group):
+                // 连拍组独占行: 组首永远新行; 组末行留白(与下一段分开)
+                if !frames.isEmpty { y += rowHeight + spacing }
+                var burstX: CGFloat = 0
+                var burstRowCount = 0
+                for photo in group {
+                    let w = cellWidth(photo)
+                    // 与旧 burstRow 换行条件等价: burstWidth + spacing + w ≡ burstX + w(burstX 为候选起点);
+                    // 勿写成 burstX + spacing + w(多算尾部 spacing 会提前换行)。
+                    if burstRowCount > 0, burstX + w > availableWidth {
+                        y += rowHeight + spacing
+                        burstX = 0
+                        burstRowCount = 0
+                    }
+                    frames.append(GridPhotoFrame(photo: photo, frame: CGRect(x: burstX, y: y, width: w, height: rowHeight)))
+                    burstX += w + spacing
+                    burstRowCount += 1
+                }
+                y += rowHeight + spacing
+            }
+        }
+        return frames
+    }
+
+    /// 连拍布局的行分组(同 flowRows: 按 frame.minY 聚合连续帧)。
+    static func burstRows(segments: [BurstSegment], cellWidth: (PhotoItem) -> CGFloat,
+                          rowHeight: CGFloat, spacing: CGFloat, availableWidth: CGFloat) -> [[PhotoItem]] {
+        let frames = burstFrames(segments: segments, cellWidth: cellWidth, rowHeight: rowHeight,
+                                 spacing: spacing, availableWidth: availableWidth)
+        var rows: [[PhotoItem]] = []
+        var lastY: CGFloat? = nil
+        for f in frames {
+            if lastY == f.frame.minY, !rows.isEmpty {
+                rows[rows.count - 1].append(f.photo)
+            } else {
+                rows.append([f.photo])
+                lastY = f.frame.minY
+            }
+        }
+        return rows
+    }
 }
