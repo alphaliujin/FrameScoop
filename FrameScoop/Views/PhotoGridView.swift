@@ -19,15 +19,8 @@ struct PhotoGridView: View {
     @State private var marqueeAdditive = false
     /// 本次拖拽期间缓存的布局帧(起拖时一次计算,全程复用;拖拽期间布局不变化)
     @State private var dragFrames: [GridPhotoFrame] = []
-    /// 网格测量盒: 滚动/布局偏好经此中转。突变引用类型属性不会使视图失效,
-    /// 避免每次滚动 tick 都全量重算 body(布局行计算 O(n) 每帧重跑)。
-    private final class GridMeasurement {
-        var contentFrame: CGRect = .zero
-        var gridWidth: CGFloat = 0
-    }
-    @State private var gridMeasurement = GridMeasurement()
-    /// 坐标空间名
-    private static let marqueeSpace = "marqueeGrid"
+    /// 网格视口宽度(布局与框选几何共用; 仅窗口缩放时变化)
+    @State private var gridWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -86,21 +79,18 @@ struct PhotoGridView: View {
                         }
                     }
                 }
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: GridContentFrameKey.self,
-                                               value: proxy.frame(in: .named(Self.marqueeSpace)))
-                    }
-                }
                 .padding(4)
+                // 手势与框选覆盖层挂在内容容器上(本地坐标 = 容器坐标):
+                // 内容坐标 = 容器坐标 - 4(padding),无需滚动偏移测量。
+                // (ScrollView 内容里的命名空间偏好测量会冻结在首帧零值, 已实测不可靠。)
+                .frame(minHeight: geo.size.height, alignment: .top)
+                .contentShape(Rectangle())
+                .overlay { marqueeOverlay }
+                .gesture(marqueeGesture)
             }
-            .coordinateSpace(name: Self.marqueeSpace)
-            .gesture(marqueeGesture)
-            .overlay { marqueeOverlay }
             .preference(key: GridViewportWidthKey.self, value: geo.size.width)
         }
-        .onPreferenceChange(GridContentFrameKey.self) { gridMeasurement.contentFrame = $0 }
-        .onPreferenceChange(GridViewportWidthKey.self) { gridMeasurement.gridWidth = $0 }
+        .onPreferenceChange(GridViewportWidthKey.self) { gridWidth = $0 }
     }
 
     /// 是否走连拍分段布局(与 grid body 原条件一致)
@@ -121,11 +111,11 @@ struct PhotoGridView: View {
             return GridGeometry.burstFrames(segments: library.displayedBurstSegments,
                                             cellWidth: cellWidth,
                                             rowHeight: library.thumbnailSize.cellSize,
-                                            spacing: 4, availableWidth: gridMeasurement.gridWidth)
+                                            spacing: 4, availableWidth: gridWidth)
         }
         return GridGeometry.flowFrames(items: library.displayedPhotos,
                                        rowHeight: library.thumbnailSize.cellSize,
-                                       spacing: 4, availableWidth: gridMeasurement.gridWidth)
+                                       spacing: 4, availableWidth: gridWidth)
     }
 
     /// 单个缩略图 cell（连拍 / 普通网格共用）：选中态、双击打开、单击选择、右键菜单。
@@ -153,8 +143,9 @@ struct PhotoGridView: View {
     // MARK: - 框选手势
 
     /// 框选拖拽: 起拖 ≥3pt 进入框选模式; 起拖瞬间记录 Shift 决定加选并缓存布局帧。
+    /// 坐标空间为内容容器的本地空间(与覆盖层一致)。
     private var marqueeGesture: some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.marqueeSpace))
+        DragGesture(minimumDistance: 3)
             .onChanged { value in
                 if marquee == nil {
                     marquee = MarqueeDrag(start: value.startLocation, current: value.location)
@@ -172,19 +163,18 @@ struct PhotoGridView: View {
             }
     }
 
-    /// 视口坐标 → 内容坐标,标准化矩形并裁剪到内容边界,应用选中。
+    /// 容器坐标(手势本地)→ 内容坐标(减 4pt padding),标准化后命中。
+    /// 无需裁剪到内容边界: 内容外的区域没有 frame 可命中。
     private func applyMarqueeSelection() {
         guard let m = marquee else { return }
-        let raw = CGRect(x: m.start.x - gridMeasurement.contentFrame.minX,
-                         y: m.start.y - gridMeasurement.contentFrame.minY,
-                         width: m.current.x - m.start.x, height: m.current.y - m.start.y)
+        let rect = CGRect(x: m.start.x - 4, y: m.start.y - 4,
+                          width: m.current.x - m.start.x, height: m.current.y - m.start.y)
             .standardized
-        let rect = raw.intersection(CGRect(origin: .zero, size: gridMeasurement.contentFrame.size))
         let ids = GridGeometry.hitPhotoIDs(in: rect, frames: dragFrames)
         library.selectPhotoIDs(ids, additive: marqueeAdditive)
     }
 
-    /// 框选矩形(视口坐标): accent 描边 + 15% 填充。
+    /// 框选矩形(内容容器坐标,与手势同一空间): accent 描边 + 15% 填充。
     @ViewBuilder
     private var marqueeOverlay: some View {
         if let m = marquee {
@@ -454,19 +444,13 @@ private struct BurstFlowLayout<Content: View>: View {
 
 // MARK: - 框选(Marquee)
 
-/// 一次框选拖拽的起止点(坐标空间: ScrollView 视口 "marqueeGrid")
+/// 一次框选拖拽的起止点(坐标空间: 内容容器的本地空间,与覆盖层一致)
 private struct MarqueeDrag {
     var start: CGPoint
     var current: CGPoint
 }
 
-/// 网格内容(布局 LazyVStack)在视口中的 frame: origin 含滚动偏移与 padding, size 为内容尺寸。
-private struct GridContentFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
-
-/// 视口宽度(布局与框选几何共用;与布局拿到的 geo.size.width 同源)。
+/// 视口宽度(布局与框选几何共用;与布局拿到的 geo.size.width 同源, 仅缩放时变化)。
 private struct GridViewportWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
