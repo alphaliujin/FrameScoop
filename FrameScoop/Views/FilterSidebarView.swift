@@ -125,7 +125,7 @@ struct FilterSidebarView: View {
     }
 
     /// 右边栏底部品牌区:图形标记(图片) + 三行文字,与原整幅品牌图视觉一致。
-    /// 文字用 .primary 自动适配明暗(原图两变体即深灰/浅灰),配合整体 opacity(0.55)。
+    /// 文字用 .primary 自动适配明暗(原图两变体即深色/浅色(文字部分为灰)),配合整体 opacity(0.55)。
     private var brandLogo: some View {
         VStack(spacing: 0) {
             Image("BrandMark")
