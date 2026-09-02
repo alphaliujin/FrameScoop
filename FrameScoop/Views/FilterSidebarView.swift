@@ -139,7 +139,7 @@ struct FilterSidebarView: View {
                 .padding(.bottom, 3)
             Text("光影为诗，拾帧成集")
                 .font(.system(size: 14))                  // ≈ 原图标语占比 11%
-                .foregroundStyle(Self.taglineGreen)       // 深绿(品牌青色加深);深色模式用亮绿保证可读性
+                .foregroundStyle(taglineGreen)            // 深绿(品牌青色加深);深色模式用亮绿保证可读性
                 .padding(.bottom, 2)
             Text("version \(Self.appVersion)")
                 .font(.system(size: 9))                   // 原图约 4%,按可读性取 9
