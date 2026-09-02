@@ -61,3 +61,28 @@ targets:
         # 支持通用二进制（Apple Silicon + Intel）
         ARCHS: "$(ARCHS_STANDARD)"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  FrameScoopTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: FrameScoopTests
+    dependencies:
+      - target: FrameScoop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.framescoop.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  FrameScoop:
+    build:
+      targets:
+        FrameScoop: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FrameScoopTests
