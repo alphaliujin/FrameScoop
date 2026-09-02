@@ -139,4 +139,22 @@ enum GridGeometry {
         }
         return rows
     }
+
+    /// 与框选矩形相交(含部分相交)的图片 id 集合。
+    static func hitPhotoIDs(in rect: CGRect, frames: [GridPhotoFrame]) -> Set<String> {
+        var ids: Set<String> = []
+        for f in frames where rect.intersects(f.frame) {
+            ids.insert(f.photo.id)
+        }
+        return ids
+    }
+}
+
+/// 框选结果的纯函数应用逻辑(可单测;VM 仅转发)。
+enum MarqueeSelection {
+    /// additive=false: 以命中集合替换当前选择(未命中任何图时即清空);
+    /// additive=true: 并入当前选择。
+    static func resolve(current: Set<String>, hit: Set<String>, additive: Bool) -> Set<String> {
+        additive ? current.union(hit) : hit
+    }
 }
