@@ -311,7 +311,7 @@ private struct FlowLayout<Content: View>: View {
     let content: (PhotoItem) -> Content
 
     var body: some View {
-        let rows = computeRows()
+        let rows = GridGeometry.flowRows(items: items, rowHeight: rowHeight, spacing: spacing, availableWidth: availableWidth)
         LazyVStack(alignment: .leading, spacing: spacing) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: spacing) {
@@ -321,26 +321,6 @@ private struct FlowLayout<Content: View>: View {
                 }
             }
         }
-    }
-
-    /// 将图片按比例宽度分行：累加每张图的显示宽度，超出可用宽度即换行
-    private func computeRows() -> [[PhotoItem]] {
-        guard availableWidth > 0 else { return [items] }
-        var rows: [[PhotoItem]] = []
-        var current: [PhotoItem] = []
-        var currentWidth: CGFloat = 0
-        for photo in items {
-            let w = max(rowHeight * photo.aspectRatio, 40)
-            if !current.isEmpty && currentWidth + spacing + w > availableWidth {
-                rows.append(current)
-                current = []
-                currentWidth = 0
-            }
-            current.append(photo)
-            currentWidth += w + (current.count > 1 ? spacing : 0)
-        }
-        if !current.isEmpty { rows.append(current) }
-        return rows
     }
 }
 
