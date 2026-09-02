@@ -26,7 +26,10 @@ enum GridGeometry {
         var rowCount = 0
         for photo in items {
             let w = max(rowHeight * photo.aspectRatio, 40)
-            if availableWidth > 0, rowCount > 0, x + spacing + w > availableWidth {
+            // 与旧 computeRows 严格等价: 旧判定 currentWidth + spacing + w,其中 currentWidth = Σwᵢ + (k-1)·spacing
+            // (不含尾部 spacing),等价于 x + w(此处 x = Σwᵢ + k·spacing 已含尾部 spacing)。
+            // 勿写成 x + spacing + w: 会把尾部 spacing 重复计一次,比旧规则提前一个 spacing 换行。
+            if availableWidth > 0, rowCount > 0, x + w > availableWidth {
                 x = 0
                 y += rowHeight + spacing
                 rowCount = 0

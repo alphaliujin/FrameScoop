@@ -39,4 +39,12 @@ final class GridGeometryTests: XCTestCase {
         let rows = GridGeometry.flowRows(items: items, rowHeight: 100, spacing: 4, availableWidth: 300)
         XCTAssertEqual(rows.map { $0.map(\.name) }, [["a.jpg", "b.jpg"], ["c.jpg"]])
     }
+
+    func testFlowFramesKeepsRowWhenExactlyFits() {
+        // 边界回归: 3×100 + 2×4 = 308 <= 310 同行(旧规则);若多算一个尾部 spacing(312 > 310)会错误换行
+        let items = [photo("a", 1, 1), photo("b", 1, 1), photo("c", 1, 1)]
+        let frames = GridGeometry.flowFrames(items: items, rowHeight: 100, spacing: 4, availableWidth: 310)
+        XCTAssertEqual(frames.map { $0.frame.origin },
+                       [CGPoint(x: 0, y: 0), CGPoint(x: 104, y: 0), CGPoint(x: 208, y: 0)])
+    }
 }
