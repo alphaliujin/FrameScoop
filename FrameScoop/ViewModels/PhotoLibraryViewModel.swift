@@ -694,6 +694,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         selectedPhotoIDs = selectedPhotoIDs.symmetricDifference(displayedIDs)
     }
 
+    /// 框选应用：additive=false 以命中集合替换选择（框选未命中任何图时即清空）；
+    /// additive=true 并入现有选择。
+    func selectPhotoIDs(_ ids: Set<String>, additive: Bool) {
+        selectedPhotoIDs = MarqueeSelection.resolve(current: selectedPhotoIDs, hit: ids, additive: additive)
+    }
+
     /// 选中并打开图片到详情窗口。
     /// 由调用方（视图，持有 openWindow 环境）负责随后 openWindow(id: "photo-detail")。
     func openPhoto(_ photo: PhotoItem) {

@@ -7,10 +7,22 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct PhotoGridView: View {
     @EnvironmentObject var library: PhotoLibraryViewModel
     @Environment(\.openWindow) private var openWindow
+
+    /// 框选拖拽状态(nil = 未在框选)
+    @State private var marquee: MarqueeDrag? = nil
+    /// 本次框选是否加选(拖拽起点时刻的 Shift 状态)
+    @State private var marqueeAdditive = false
+    /// 网格内容在视口中的 frame(由 GridContentFrameKey 偏好回填)
+    @State private var contentFrame: CGRect = .zero
+    /// 网格视口宽度(由 GridViewportWidthKey 偏好回填)
+    @State private var gridWidth: CGFloat = 0
+    /// 坐标空间名
+    private static let marqueeSpace = "marqueeGrid"
 
     var body: some View {
         Group {
@@ -49,9 +61,7 @@ struct PhotoGridView: View {
                     // 任一「只显示」过滤开启时统一用普通流式展示（BurstFlowLayout 读的是
                     // 未过滤的 displayedBurstSegments，只显示模糊/闭眼/选中时须改用
                     // 已过滤的 displayedPhotos，否则网格会显示全部照片、与胶片条不一致）
-                    if library.showsBurstFilter && !library.showsBlurOnly
-                        && !library.showsEyeClosedOnly && !library.showsSelectedOnly
-                        && !library.displayedBurstSegments.isEmpty {
+                    if usesBurstLayout {
                         BurstFlowLayout(
                             spacing: 4,
                             rowHeight: library.thumbnailSize.cellSize,
@@ -71,9 +81,46 @@ struct PhotoGridView: View {
                         }
                     }
                 }
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: GridContentFrameKey.self,
+                                               value: proxy.frame(in: .named(Self.marqueeSpace)))
+                    }
+                }
                 .padding(4)
             }
+            .coordinateSpace(name: Self.marqueeSpace)
+            .gesture(marqueeGesture)
+            .overlay { marqueeOverlay }
+            .preference(key: GridViewportWidthKey.self, value: geo.size.width)
         }
+        .onPreferenceChange(GridContentFrameKey.self) { contentFrame = $0 }
+        .onPreferenceChange(GridViewportWidthKey.self) { gridWidth = $0 }
+    }
+
+    /// 是否走连拍分段布局(与 grid body 原条件一致)
+    private var usesBurstLayout: Bool {
+        library.showsBurstFilter && !library.showsBlurOnly
+            && !library.showsEyeClosedOnly && !library.showsSelectedOnly
+            && !library.displayedBurstSegments.isEmpty
+    }
+
+    /// 单元格宽度(与 GridCell body 一致)
+    private func cellWidth(_ photo: PhotoItem) -> CGFloat {
+        max(library.thumbnailSize.cellSize * photo.aspectRatio, 40)
+    }
+
+    /// 当前显示布局下每张图的内容坐标 frame(框选命中用;与显示布局共用 GridGeometry)
+    private var layoutFrames: [GridPhotoFrame] {
+        if usesBurstLayout {
+            return GridGeometry.burstFrames(segments: library.displayedBurstSegments,
+                                            cellWidth: cellWidth,
+                                            rowHeight: library.thumbnailSize.cellSize,
+                                            spacing: 4, availableWidth: gridWidth)
+        }
+        return GridGeometry.flowFrames(items: library.displayedPhotos,
+                                       rowHeight: library.thumbnailSize.cellSize,
+                                       spacing: 4, availableWidth: gridWidth)
     }
 
     /// 单个缩略图 cell（连拍 / 普通网格共用）：选中态、双击打开、单击选择、右键菜单。
@@ -96,6 +143,53 @@ struct PhotoGridView: View {
             onReveal: { library.revealInFinder(photo) },
             onTrash: { library.trashPhotos([photo.id]) }
         )
+    }
+
+    // MARK: - 框选手势
+
+    /// 框选拖拽: 起拖 ≥3pt 进入框选模式; 起拖瞬间记录 Shift 决定加选。
+    private var marqueeGesture: some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named(Self.marqueeSpace))
+            .onChanged { value in
+                if marquee == nil {
+                    marquee = MarqueeDrag(start: value.startLocation, current: value.location)
+                    marqueeAdditive = NSEvent.modifierFlags.contains(.shift)
+                } else {
+                    marquee?.current = value.location
+                }
+                applyMarqueeSelection()
+            }
+            .onEnded { value in
+                marquee?.current = value.location
+                applyMarqueeSelection()
+                marquee = nil
+            }
+    }
+
+    /// 视口坐标 → 内容坐标,标准化矩形并裁剪到内容边界,应用选中。
+    private func applyMarqueeSelection() {
+        guard let m = marquee else { return }
+        let raw = CGRect(x: m.start.x - contentFrame.minX, y: m.start.y - contentFrame.minY,
+                         width: m.current.x - m.start.x, height: m.current.y - m.start.y)
+            .standardized
+        let rect = raw.intersection(CGRect(origin: .zero, size: contentFrame.size))
+        let ids = GridGeometry.hitPhotoIDs(in: rect, frames: layoutFrames)
+        library.selectPhotoIDs(ids, additive: marqueeAdditive)
+    }
+
+    /// 框选矩形(视口坐标): accent 描边 + 15% 填充。
+    @ViewBuilder
+    private var marqueeOverlay: some View {
+        if let m = marquee {
+            let rect = CGRect(x: min(m.start.x, m.current.x), y: min(m.start.y, m.current.y),
+                              width: abs(m.current.x - m.start.x), height: abs(m.current.y - m.start.y))
+            Rectangle()
+                .stroke(Color.accentColor, lineWidth: 1)
+                .background(Color.accentColor.opacity(0.15))
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - 网格单元格（Equatable，跳过未变化 cell 的重渲染）
@@ -349,4 +443,24 @@ private struct BurstFlowLayout<Content: View>: View {
             }
         }
     }
+}
+
+// MARK: - 框选(Marquee)
+
+/// 一次框选拖拽的起止点(坐标空间: ScrollView 视口 "marqueeGrid")
+private struct MarqueeDrag {
+    var start: CGPoint
+    var current: CGPoint
+}
+
+/// 网格内容(布局 LazyVStack)在视口中的 frame: origin 含滚动偏移与 padding, size 为内容尺寸。
+private struct GridContentFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+/// 视口宽度(布局与框选几何共用;与布局拿到的 geo.size.width 同源)。
+private struct GridViewportWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
