@@ -28,7 +28,8 @@ RW_DMG="$BUILD_DIR/$APP_NAME-rw.dmg"
 #   Apple Development 证书带 Team ID，照片库可正常授权。
 # 用 SHA-1 而非名字：keychain 里有两张同名 "Apple Development" 证书（一张已吊销），按名字签名会歧义报错。
 # 证书续期/更换后用 `security find-identity -v -p codesigning` 查未吊销那张的哈希并更新此处。
-RELEASE_SIGN_IDENTITY="${RELEASE_SIGN_IDENTITY:-B97352916C6E3C5F36FCA0EF13C73E31FC56C46E}"
+# 上次更新: 2026-09-02（证书续期）
+RELEASE_SIGN_IDENTITY="${RELEASE_SIGN_IDENTITY:-A45BDC23C46568921F13B9EA666FAF334747CBFE}"
 ENTITLEMENTS="$ROOT/FrameScoop/FrameScoop.entitlements"
 
 cd "$ROOT"
@@ -54,7 +55,7 @@ xattr -cr "$STAGING/$APP_NAME.app" 2>/dev/null || true   # 清除隔离属性
 # 2.5 重签为 Apple Development（注入 Team ID，使照片库 TCC 可授权）
 echo "-> 用 Apple Development 证书重签（注入 Team ID）…"
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$RELEASE_SIGN_IDENTITY"; then
-  echo "✗ 找不到发布签名证书（SHA-1: $RELEASE_SIGN_IDENTITY）。" >&2
+  echo "✗ 找不到发布签名证书（SHA-1: ${RELEASE_SIGN_IDENTITY}）。" >&2
   echo "  运行 security find-identity -v -p codesigning，取未吊销 Apple Development 证书的哈希，" >&2
   echo "  通过 RELEASE_SIGN_IDENTITY 环境变量传入或更新本脚本。" >&2
   exit 1
