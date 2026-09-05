@@ -19,7 +19,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="FrameScoop"
 BUNDLE_ID="com.framescoop.app"
-TEAM_ID="${TEAM_ID:-2L5K72XW64}"
+TEAM_ID="${TEAM_ID:-VZ272K534R}"
 DERIVED="$ROOT/build/DerivedData"
 ARCHIVE="$ROOT/build/$APP_NAME.xcarchive"
 EXPORT_DIR="$ROOT/build/appstore"
@@ -27,9 +27,10 @@ PLIST="$ROOT/build/export_appstore.plist"
 
 cd "$ROOT"
 
-# 0. 定位未吊销的 Apple Distribution 证书（Mac App Store）
+# 0. 定位未吊销的 Mac App Store 分发证书（钥匙串显示为 "Apple Distribution" 或
+#    经典命名 "3rd Party Mac Developer Application"，两者皆匹配）
 DIST_HASH="$(security find-identity -v -p codesigning 2>/dev/null \
-  | grep 'Apple Distribution' | head -1 | grep -oE '[0-9A-F]{40}')"
+  | grep -E 'Apple Distribution|3rd Party Mac Developer Application' | head -1 | grep -oE '[0-9A-F]{40}')"
 if [ -z "$DIST_HASH" ]; then
   echo "✗ 找不到 Apple Distribution 证书。" >&2
   echo "  请先在 https://developer.apple.com/account/resources/certificates 创建（类型选 Mac App Store 的 Distribution）并安装。" >&2
@@ -69,32 +70,23 @@ xcodebuild archive \
   CODE_SIGN_IDENTITY="$DIST_HASH" \
   PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID"
 
-# 3. 导出 App Store 包
+# 3. 打包 .pkg：productbuild 直接包装归档里已签名的 .app，并用 Installer 证书签名安装包。
+#    不用 xcodebuild -exportArchive（它要求 Xcode 账号会话在线，会话过期会导致身份选择错乱）。
 echo "========================================"
-echo " 2) 导出 App Store 包 (.pkg)"
+echo " 2) 打包并签名 .pkg (productbuild)"
 echo "========================================"
+INSTALLER_HASH="$(security find-identity -v 2>/dev/null \
+  | grep -E '3rd Party Mac Developer Installer' | head -1 | grep -oE '[0-9A-F]{40}')"
+if [ -z "$INSTALLER_HASH" ]; then
+  echo "✗ 找不到 Mac Installer Distribution 证书。" >&2
+  exit 1
+fi
+APP_IN_ARCHIVE="$ARCHIVE/Products/Applications/$APP_NAME.app"
 rm -rf "$EXPORT_DIR"
-cat > "$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key><string>app-store</string>
-    <key>signingStyle</key><string>manual</string>
-    <key>signingCertificate</key><string>Apple Distribution</string>
-    <key>teamID</key><string>$TEAM_ID</string>
-    <key>provisioningProfiles</key>
-    <dict><key>$BUNDLE_ID</key><string>$PROFILE_UUID</string></dict>
-    <key>uploadSymbols</key><true/>
-    <key>manageAppVersionAndBuildNumber</key><false/>
-</dict>
-</plist>
-EOF
-
-xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE" \
-  -exportOptionsPlist "$PLIST" \
-  -exportPath "$EXPORT_DIR"
+mkdir -p "$EXPORT_DIR"
+productbuild --component "$APP_IN_ARCHIVE" /Applications \
+  --sign "$INSTALLER_HASH" \
+  "$EXPORT_DIR/$APP_NAME.pkg"
 
 echo ""
 echo "✅ App Store 包已生成"
