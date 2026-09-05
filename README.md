@@ -1,6 +1,6 @@
 # FrameScoop
 
-纯原生 macOS 图片浏览器 —— 按文件夹看图，界面模仿“照片”App。
+纯原生 macOS 图片浏览器 —— 按文件夹看图，界面标准苹果风格。
 基于 SwiftUI 开发，最低系统版本 **macOS 14 Sonoma**，支持 **Apple Silicon 与 Intel**。
 
 > 技术栈：SwiftUI · AppKit · ImageIO · CoreGraphics · Foundation
