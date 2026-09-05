@@ -1,93 +1,66 @@
 #!/bin/bash
 #
 # notarize.sh
-# 对 FrameScoop.app 进行签名、公证、装订票据，并清除 Gatekeeper 隔离。
+# 用 Developer ID 证书签名并打包 DMG，对 DMG 提交公证、装订票据。
 #
-# 前置条件（需 Apple 开发者账号）：
-#   1. 拥有 “Developer ID Application” 签名证书（Keychain 中已安装）。
-#   2. 创建 App 专用密码 或 App Store Connect API Key 用于 notarytool。
+# 前置条件（需付费 Apple 开发者账号）：
+#   1. Keychain 中已安装 “Developer ID Application” 证书
+#      （开发者后台创建：Developer ID Application 类型，上传 CSR 后下载 .cer 双击安装）。
+#   2. 已配置 notarytool 凭证（App Store Connect API Key 方式）：
+#      App Store Connect → 用户与访问 → 集成 → Team Keys → 创建密钥（Developer 角色），
+#      下载 .p8 并记下 Key ID 与 Issuer ID，然后执行一次：
+#        xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+#          --issuer "$ISSUER_ID" --key-id "$KEY_ID" --key "/path/to/AuthKey_XXXX.p8"
 #
-# 环境变量（按需设置，也可在脚本内填）：
-#   SIGN_IDENTITY      签名身份，默认 "Developer ID Application: Your Name (TEAMID)"
-#   NOTARY_PROFILE     notarytool 凭证名（需先通过 `xcrun notarytool store-credentials` 创建）
-#                      或使用 APPLE_ID / APP_PASSWORD / TEAM_ID 组合
+# 环境变量（按需覆盖）：
+#   NOTARY_PROFILE     notarytool 凭证名，默认 frameScoop-notary
 #
 # 用法:
 #   bash Scripts/notarize.sh
+#   产物: build/FrameScoop.dmg（已公证 + 装订票据，可直接对外分发）
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="FrameScoop"
-APP_PATH="$ROOT/build/DerivedData/Build/Products/Release/$APP_NAME.app"
-
-# ====== 配置区（请按实际填写） ======
-SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Your Name (TEAMID)}"
+DMG_PATH="$ROOT/build/$APP_NAME.dmg"
 NOTARY_PROFILE="${NOTARY_PROFILE:-frameScoop-notary}"
-# 也可直接用账号密码（二选一）：
-# APPLE_ID="you@example.com"
-# APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-# TEAM_ID="XXXXXXXXXX"
-ENTITLEMENTS="$ROOT/FrameScoop/FrameScoop.entitlements"
-# ====================================
 
 cd "$ROOT"
 
-# 0. 先确保有 Release 构建产物
-if [ ! -d "$APP_PATH" ]; then
-  echo "-> 未找到 Release 产物，先构建…"
-  CONFIG=Release bash Scripts/build.sh
-fi
-
-if [ ! -d "$APP_PATH" ]; then
-  echo "✗ 构建产物不存在: $APP_PATH" >&2
+# 0. 定位未吊销的 Developer ID Application 证书（按 SHA-1 传给 package_dmg.sh 重签）
+DEVID_HASH="$(security find-identity -v -p codesigning 2>/dev/null \
+  | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+if [ -z "$DEVID_HASH" ]; then
+  echo "✗ 找不到 Developer ID Application 证书。" >&2
+  echo "  请先在 https://developer.apple.com/account/resources/certificates 创建并安装。" >&2
   exit 1
 fi
+echo "-> Developer ID 证书: $DEVID_HASH"
 
 echo "========================================"
-echo " 1) 代码签名 (Hardened Runtime + Entitlements)"
+echo " 1) Developer ID 签名 + 打包 DMG"
 echo "========================================"
-# 递归签名内嵌 Helper/框架（本工程暂无），随后签名主 App
-codesign --force --deep \
-  --options runtime \
-  --entitlements "$ENTITLEMENTS" \
-  --sign "$SIGN_IDENTITY" \
-  "$APP_PATH"
-
-# 校验签名
-codesign --verify --strict --verbose=2 "$APP_PATH"
+# package_dmg.sh 内部以 RELEASE_SIGN_IDENTITY 重签（注入 Team ID + RFC3161 时间戳）
+RELEASE_SIGN_IDENTITY="$DEVID_HASH" bash Scripts/package_dmg.sh
 
 echo "========================================"
-echo " 2) 打包 zip 并提交公证"
+echo " 2) 提交公证 (DMG)"
 echo "========================================"
-ZIP_PATH="$ROOT/build/$APP_NAME.zip"
-ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
-
-# 提交方式二选一：优先使用已存储的 notarytool 凭证
-if [ -n "${APPLE_ID:-}" ] && [ -n "${APP_PASSWORD:-}" ] && [ -n "${TEAM_ID:-}" ]; then
-  xcrun notarytool submit "$ZIP_PATH" \
-    --apple-id "$APPLE_ID" \
-    --password "$APP_PASSWORD" \
-    --team-id "$TEAM_ID" \
-    --wait
-else
-  xcrun notarytool submit "$ZIP_PATH" \
-    --keychain-profile "$NOTARY_PROFILE" \
-    --wait
-fi
+xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
 
 echo "========================================"
-echo " 3) 装订公证票据 (Staple)"
+echo " 3) 装订公证票据 (Staple DMG)"
 echo "========================================"
-xcrun stapler staple "$APP_PATH"
-xcrun stapler validate "$APP_PATH"
+xcrun stapler staple "$DMG_PATH"
+xcrun stapler validate "$DMG_PATH"
 
 echo "========================================"
 echo " 4) 清除 Gatekeeper 隔离属性"
 echo "========================================"
-xattr -cr "$APP_PATH"
+xattr -cr "$DMG_PATH" 2>/dev/null || true
 
 echo ""
-echo "✅ 签名、公证、装订、去隔离全部完成"
-echo "   产物: $APP_PATH"
-echo "   分发方式: 直接分发 .app，或将 build/$APP_NAME.zip 发给用户"
+echo "✅ Developer ID 签名、DMG 打包、公证、装订全部完成"
+echo "   产物: $DMG_PATH"
+echo "   校验: xcrun stapler validate \"$DMG_PATH\""
