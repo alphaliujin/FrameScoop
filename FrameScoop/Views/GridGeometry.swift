@@ -158,3 +158,13 @@ enum MarqueeSelection {
         additive ? current.union(hit) : hit
     }
 }
+
+/// Shift 点击范围选择：orderedIDs（展示顺序）中 from...to 之间的全部 id（含两端）。
+/// 任一 id 不存在或列表为空则返回空集合（调用方兜底为「仅选中被点张」）。
+enum RangeSelection {
+    static func range(from: String, to: String, in orderedIDs: [String]) -> Set<String> {
+        guard let i = orderedIDs.firstIndex(of: from),
+              let j = orderedIDs.firstIndex(of: to) else { return [] }
+        return Set(orderedIDs[min(i, j)...max(i, j)])
+    }
+}
