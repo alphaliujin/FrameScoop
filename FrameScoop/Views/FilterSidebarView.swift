@@ -23,10 +23,10 @@ struct FilterSidebarView: View {
                 Section("智能筛选") {
                     Toggle("连拍筛选", isOn: $library.showsBurstFilter)
                         .help("按画面相似（dHash）识别连拍，并分段显示")
-                    Toggle("人脸筛选", isOn: $library.showsBlurFilter)
+                    Toggle("人脸模糊筛选", isOn: $library.showsBlurFilter)
                         .help("一次 Vision 检测人脸，按拉普拉斯方差判断人脸模糊；左上角标红/黄 face.dashed")
                     Toggle("闭眼检测", isOn: $library.showsEyeClosedFilter)
-                        .help("与人脸筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；左上角标红/黄 eye.slash")
+                        .help("与人脸模糊筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；左上角标红/黄 eye.slash")
                 }
 
                 if !library.selectedPhotoIDs.isEmpty {
