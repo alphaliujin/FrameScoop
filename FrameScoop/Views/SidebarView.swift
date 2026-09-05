@@ -40,31 +40,36 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 // 图片数据导入进度：文件夹加载后自动预计算连拍 dHash + 人脸模糊分。
-                // 算完后不消失，保留满进度条 + 完成标记，切文件夹随新数据重置。
-                if library.precomputeTotal > 0 {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text("图片数据导入：\(library.precomputeDone) / \(library.precomputeTotal) 张")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                            Spacer()
-                            if !library.isPrecomputing {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                // 只在导入过程中显示；完成后绿色对勾 + 100% 停留约 1 秒再淡出隐藏。
+                // 全部命中缓存或空文件夹时不出现。切文件夹随新数据重置。
+                if (library.isPrecomputing || library.showPrecomputeSummary) && library.precomputeTotal > 0 {
+                    Group {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text("图片数据导入：\(library.precomputeDone) / \(library.precomputeTotal) 张")
                                     .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                Spacer()
+                                if !library.isPrecomputing {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.caption)
+                                }
                             }
+                            ProgressView(value: Double(library.precomputeDone),
+                                         total: Double(library.precomputeTotal))
+                                .controlSize(.small)
                         }
-                        ProgressView(value: Double(library.precomputeDone),
-                                     total: Double(library.precomputeTotal))
-                            .controlSize(.small)
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 6)
+                    .transition(.opacity)
                 }
                 addFolderButton
             }
+            .animation(.easeOut(duration: 0.25), value: library.showPrecomputeSummary)
         }
         // 本地选择 -> 视图模型（onChange 在更新事务之后执行，安全）
         .onChange(of: selection) { _, newID in
