@@ -229,6 +229,9 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published private(set) var isPrecomputing = false
     @Published private(set) var precomputeDone = 0
     @Published private(set) var precomputeTotal = 0
+    /// 完成态是否展示中：算完后置 true（对勾 + 100% 停留约 1 秒），延迟任务到期置 false。
+    /// 切文件夹/清空时在 precomputeAnalysis 入口重置为 false。
+    @Published private(set) var showPrecomputeSummary = false
 
     /// 用户可关闭的错误提示（非空时弹窗）
     @Published var errorMessage: String?
@@ -1087,6 +1090,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 与筛选开关解耦--无论是否开启筛选都先算好；磁盘已存且 mtime 未变的直接复用，仅算缺失的。
     /// 侧栏底部显示「图片数据导入：xx/xxx 张」。切文件夹 cancel + 递增 token 取消在途任务。
     private func precomputeAnalysis() {
+        // 入口即重置完成态：空文件夹、切文件夹、重算都不得残留上一轮的完成标记
+        showPrecomputeSummary = false
         let photos = self.photos
         guard !photos.isEmpty else {
             precomputeTask?.cancel()
@@ -1201,6 +1206,15 @@ final class PhotoLibraryViewModel: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self, token == self.precomputeToken else { return }
                 self.isPrecomputing = false
+                self.showPrecomputeSummary = true
+                // 完成态停留约 1 秒后隐藏；期间切文件夹 token 已递增，旧延迟任务自然失效，
+                // 不会误藏新文件夹的进度（新文件夹的完成态由新 token 的新延迟任务负责）。
+                let doneToken = token
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard doneToken == self.precomputeToken else { return }
+                    self.showPrecomputeSummary = false
+                }
                 // 收尾重排：mergePrecomputeBatch 仅在每 128 张存盘点重排，末批的贡献已并入内存缓存
                 // 却未反映到 burstSegments/displayedPhotos；不补则开筛选时网格漏掉末批照片。
                 if self.showsBurstFilter { self.regroupBursts() }
