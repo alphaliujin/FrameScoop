@@ -30,7 +30,7 @@ cd "$ROOT"
 
 # 0. 定位未吊销的 Developer ID Application 证书（按 SHA-1 传给 package_dmg.sh 重签）
 DEVID_HASH="$(security find-identity -v -p codesigning 2>/dev/null \
-  | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+  | grep 'Developer ID Application' | head -1 | grep -oE '[0-9A-F]{40}')"
 if [ -z "$DEVID_HASH" ]; then
   echo "✗ 找不到 Developer ID Application 证书。" >&2
   echo "  请先在 https://developer.apple.com/account/resources/certificates 创建并安装。" >&2
