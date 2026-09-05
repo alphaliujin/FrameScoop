@@ -134,7 +134,7 @@ struct PhotoGridView: View {
             isRedEye: eyeClosedOn && library.closedEyePhotoIDs.contains(photo.id),
             isYellowEye: eyeClosedOn && library.partialClosedEyePhotoIDs.contains(photo.id),
             onDoubleTap: { openInDetail(photo) },
-            onSingleTap: { library.toggleSelection(photo) },
+            onSingleTap: { library.clickSelection(photo, shift: NSEvent.modifierFlags.contains(.shift)) },
             onReveal: { library.revealInFinder(photo) },
             onTrash: { library.trashPhotos([photo.id]) }
         )

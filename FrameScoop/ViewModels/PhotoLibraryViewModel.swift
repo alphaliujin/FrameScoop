@@ -96,6 +96,10 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 多选中的图片 id（基于 url.path，与 PhotoItem.id 一致，跨 reload 稳定）
     @Published var selectedPhotoIDs: Set<String> = []
 
+    /// Shift 范围选择的锚点（Finder 语义）：最近一次非 Shift 选中动作确定，
+    /// 连续 Shift 点击从同一锚点扩展；框选非加选时更新为框选结果首张。
+    private var selectionAnchor: String?
+
     /// 详情视图当前展示的图片
     @Published var currentPhoto: PhotoItem? {
         didSet {
@@ -665,6 +669,29 @@ final class PhotoLibraryViewModel: ObservableObject {
         }
     }
 
+    /// 网格单击选中（Finder 风格 Shift 范围选择）：
+    /// - 普通点击：toggle（维持现状），锚点 = 该张
+    /// - Shift 点击且锚点有效且不同张：选中集 = 锚点...该张的区间（替换），锚点不变
+    /// - Shift 点击且锚点 == 该张：选中集收缩为 {该张}（锚点赋同值，无实际变化）
+    /// - Shift 点击但无锚点/锚点已不在当前列表：选中集 = {该张}，锚点 = 该张
+    func clickSelection(_ photo: PhotoItem, shift: Bool) {
+        if shift {
+            if let anchor = selectionAnchor, anchor != photo.id {
+                let range = RangeSelection.range(from: anchor, to: photo.id,
+                                                 in: displayedPhotos.map(\.id))
+                if !range.isEmpty {
+                    selectedPhotoIDs = range
+                    return  // 锚点不变：连续 Shift 点击从同一锚点扩展
+                }
+            }
+            selectedPhotoIDs = [photo.id]
+            selectionAnchor = photo.id
+            return
+        }
+        toggleSelection(photo)
+        selectionAnchor = photo.id
+    }
+
     /// 切换当前详情图片的选中状态（详情视图中按空格；播放中可标记当前张）。
     /// 同步捕获 currentPhoto 再延后发布：空格经 onKeyPress 可能在视图更新事务中触发
     ///（播放时每 2s 更新），且避免播放翻页后 currentPhoto 已变导致标记错张。
@@ -701,6 +728,11 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// additive=true 并入现有选择。
     func selectPhotoIDs(_ ids: Set<String>, additive: Bool) {
         selectedPhotoIDs = MarqueeSelection.resolve(current: selectedPhotoIDs, hit: ids, additive: additive)
+        if !additive {
+            // 非加选框选后，锚点 = 新选中集按展示顺序的第一张（空则 nil）；
+            // 加选（Shift 框选）保持原锚点，后续 Shift 点击仍从原锚点扩展。
+            selectionAnchor = displayedPhotos.first(where: { selectedPhotoIDs.contains($0.id) })?.id
+        }
     }
 
     /// 选中并打开图片到详情窗口。
