@@ -17,7 +17,30 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="FrameScoop"
-CONFIG="${CONFIG:-Release}"
+
+# 本脚本只产出 Release 分发包，不提供 CONFIG 旋钮。
+#
+# 原来写的是 CONFIG="${CONFIG:-Release}"，但下面构建那行写死 CONFIG=Release ——
+# 两者不一致：传 CONFIG=Debug 时，脚本会去找 Debug 产物、却去构建 Release，
+# 然后以「产物不存在」失败。
+#
+# 修法是**收紧成只支持 Release**，而不是让构建去跟随 $CONFIG。理由是：
+# DMG 输出路径 build/FrameScoop.dmg 是单一的，notarize.sh 也正是按这个路径提交
+# 公证。若允许按配置切换，Debug 产物会写到同一个路径上 —— 于是「显式传了
+# CONFIG=Debug 却被无声忽略」和「Debug 包被当成正式包公证分发」两种事故都成为可能。
+# 收紧之后这条路径根本不存在：该旋钮全仓库无人使用（notarize.sh 与 README 都不传），
+# 且 Debug 本来就不是分发产物。
+# 需要 Debug 构建请直接用: CONFIG=Debug bash Scripts/build.sh
+if [ -n "${CONFIG:-}" ] && [ "$CONFIG" != "Release" ]; then
+  # 注意 ${CONFIG} 的花括号不能省：紧跟其后的是多字节的「。」，
+  # macOS 自带的 bash 3.2 会把它的字节吃进变量名 → unbound variable。
+  echo "✗ package_dmg.sh 只支持 Release，当前 CONFIG=${CONFIG}。" >&2
+  echo "  DMG 输出路径 build/$APP_NAME.dmg 是单一的，notarize.sh 按此路径提交公证；" >&2
+  echo "  允许按配置切换会让非 Release 产物写到同一路径、可能被当成正式包分发。" >&2
+  echo "  需要 Debug 构建请用: CONFIG=Debug bash Scripts/build.sh" >&2
+  exit 1
+fi
+CONFIG="Release"
 DERIVED="$ROOT/build/DerivedData"
 APP_PATH="$DERIVED/Build/Products/$CONFIG/$APP_NAME.app"
 BUILD_DIR="$ROOT/build"
