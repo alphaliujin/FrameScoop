@@ -58,8 +58,10 @@
     <!--
       权限说明：
       FrameScoop 通过文件系统读取用户授权的文件夹，并通过 Photos.framework 读取系统照片库
-      （含 iCloud 同步到本机的照片）。Photos.framework 在 macOS 沙盒下经 TCC 授权访问，
-      故声明 NSPhotoLibraryUsageDescription（见上方）；无需额外沙盒权限项。沙盒权限见 .entitlements。
+      （含 iCloud 同步到本机的照片）。Photos.framework 经 TCC 授权访问，需两处配合声明：
+      Info.plist 的 NSPhotoLibraryUsageDescription（见上方，否则不会弹窗）
+      + entitlements 的 com.apple.security.personal-information.photos-library
+      （硬运行/公证分发下必需，缺失会静默返回 denied）。
     -->
 </dict>
 </plist>

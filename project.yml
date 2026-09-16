@@ -38,9 +38,18 @@ targets:
         PRODUCT_NAME: FrameScoop
         INFOPLIST_FILE: FrameScoop/Info.plist
         CODE_SIGN_ENTITLEMENTS: FrameScoop/FrameScoop.entitlements
-        # Hardened Runtime 关闭：Apple Development 证书 + HR 组合在 macOS 26 上会让
-        # 照片库 TCC 静默拒绝（不弹窗、不出现在系统设置列表，2026-09-02 探针实测）。
-        # 当前分发不走公证（公证需 Developer ID 证书），如将来启用公证再打开。
+        # Hardened Runtime 关闭（仅影响 Xcode 本地构建；直发包由 package_dmg.sh
+        # 以 Developer ID 重签时必然开启硬运行，公证的硬性要求）。
+        #
+        # 2026-09-16 更正：此处原注释写「Apple Development 证书 + HR 会让照片库 TCC
+        # 静默拒绝（2026-09-02 探针实测）」—— 那个结论**归错了因**。真实原因是
+        # entitlements 里缺 com.apple.security.personal-information.photos-library：
+        # 硬运行要求资源访问必须由 entitlement 显式声明，缺失才导致 requestAuthorization
+        # 静默返回 .denied。同一权限项在纯沙盒下不声明也能工作，所以那次探针只看到
+        # 「开了 HR 就坏」这个规律，把 HR 当成了元凶，于是关掉 HR 绕过去 —— 而 1.0.9
+        # 直发版首次启用公证（因而必然开 HR），这个被绕过的坑就暴露了。
+        # 权限项已补齐，此处保留 NO 只是维持本地调试现状；如需让本地构建与发布配置
+        # 一致（更容易提前发现此类差异），可改为 YES。
         ENABLE_HARDENED_RUNTIME: NO
         # 关闭 Xcode 15 Debug Dylib Support：自签名证书无 TeamIdentifier，
         # 拆出的 FrameScoop.debug.dylib 与主二进制 Team ID 不匹配，dyld library

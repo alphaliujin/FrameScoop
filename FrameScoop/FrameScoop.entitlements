@@ -15,11 +15,27 @@
     <true/>
 
     <!--
+      照片库读写权限（Photos.framework）。
+      2026-09-16 补：此前这里**没有**这一项，注释里写的是「无需额外沙盒权限项」——
+      那是个未经验证的假设（见 commit b5313aa，当时只改了注释、没加权限项），
+      并且被复制到了 README。实测后果是 1.0.9 直发版打开「照片图库」直接显示
+      「无法访问照片库」：PHPhotoLibrary.requestAuthorization 返回 .denied，
+      不弹窗、app 也不出现在「系统设置 › 隐私与安全性 › 照片」。
+
+      Hardened Runtime 的设计就是「资源访问必须用 entitlement 显式声明」，
+      而直发包由 package_dmg.sh 以 Developer ID 重签时必然开启硬运行
+      （公证硬性要求）。所以原有的「靠关掉硬运行绕开」的做法在公证分发下不再成立，
+      正确解法是补上这个声明。
+      注：XML 注释里不能出现连续两个短横线，故上文一律不写命令行开关原文。
+    -->
+    <key>com.apple.security.personal-information.photos-library</key>
+    <true/>
+
+    <!--
       说明：
       - 不申请网络权限（应用完全离线运行；iCloud 照片由系统照片库代理按需下载，非应用直接联网）
       - 不使用任何内核扩展（kext）
-      - 照片库访问通过 Photos.framework（系统照片库守护进程 XPC），经 TCC 授权，
-        无需额外沙盒权限项（仅需 Info.plist 的 NSPhotoLibraryUsageDescription）
+      - Photos.framework 访问另需 Info.plist 的 NSPhotoLibraryUsageDescription（已声明）
       以上为 FrameScoop 运行所需的全部系统权限。
     -->
 </dict>

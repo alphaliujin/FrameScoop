@@ -34,7 +34,11 @@ com.apple.security.files.bookmarks.app-scope = true <!-- 安全作用域书签�
 ```
 
 - 不声明网络权限（应用完全离线；iCloud 照片由系统照片库守护进程按需下载，非应用直接联网）
-- 通过 Photos.framework 读取系统照片库（含 iCloud 同步照片）：macOS 沙盒下经 TCC 授权访问，声明 `NSPhotoLibraryUsageDescription`，无需额外沙盒权限项
+- 通过 Photos.framework 读取系统照片库（含 iCloud 同步照片）：声明 `NSPhotoLibraryUsageDescription`
+  **与 `com.apple.security.personal-information.photos-library` 权限项**，经 TCC 授权访问。
+  该权限项不可省略 —— 直发包由 Developer ID 重签时必然开启 Hardened Runtime，而硬运行要求
+  资源访问必须由 entitlement 显式声明；缺失时 `requestAuthorization` 会静默返回 `.denied`
+  （不弹窗、app 也不出现在「系统设置 › 隐私与安全性 › 照片」）。
 - 所有命令行调用（`mdls`）均通过 `ShellExecutor` 做异常捕获与超时保护，**绝不因 shell 失败而崩溃**
 
 ---
