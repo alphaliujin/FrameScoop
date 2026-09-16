@@ -42,14 +42,51 @@ case "$PHASE" in
   *) echo "✗ PHASE 只能是 all / stage / finish，当前: $PHASE" >&2; exit 1 ;;
 esac
 
-# 发布版重签身份：Apple Development 证书（带 Team Identifier）。
-# 原因：照片库走 Photos.framework，TCC 按签名登记 app；自签名 "FrameScoop Dev" 无 Team ID，
+# 发布版重签身份：默认自动探测钥匙串中**有效**的 "Apple Development" 证书。
+#
+# 为什么必须是带 Team ID 的证书：
+#   照片库走 Photos.framework，TCC 按签名登记 app。自签名 "FrameScoop Dev" 无 Team ID，
 #   requestAuthorization 直接返回 denied、不弹窗、也不出现在「系统设置 › 隐私 › 照片」列表。
 #   Apple Development 证书带 Team ID，照片库可正常授权。
-# 用 SHA-1 而非名字：keychain 里有两张同名 "Apple Development" 证书（一张已吊销），按名字签名会歧义报错。
-# 证书续期/更换后用 `security find-identity -v -p codesigning` 查未吊销那张的哈希并更新此处。
-# 上次更新: 2026-09-02（证书续期）
-RELEASE_SIGN_IDENTITY="${RELEASE_SIGN_IDENTITY:-A45BDC23C46568921F13B9EA666FAF334747CBFE}"
+#
+# 为什么用 SHA-1 而不是证书名：
+#   同一个名字在钥匙串里可能对应多条记录（本机实测 "Apple Development" 有 4 条，
+#   历史上前一版脚本还遇到过同名两张证书）。按名字签名会歧义报错，SHA-1 唯一。
+#
+# 为什么可以自动探测、不必再手工维护哈希：
+#   `security find-identity -v -p codesigning` 的 -v 只列出**通过有效性校验**的身份。
+#   本机实测：不带 -v 输出 12 条（含 4 条 CSSMERR_TP_NOT_TRUSTED 的自签名证书），
+#   带 -v 只剩 8 条。证书续期 / 吊销 / 过期都会自动反映到这张列表上，因此
+#   「写死一个哈希」的做法（上一版上次更新于 2026-09-02）必然随证书轮换而失效。
+#
+# 为什么默认挑 Apple Development 而非 Developer ID：
+#   本脚本的默认路径 PHASE=all 是**本地出包**（不公证）。若这里挑 Developer ID，
+#   IS_DEVID 会变成 1，于是签出「Developer ID 签了名但从未公证」的 DMG ——
+#   本机可用、别人机器上被 Gatekeeper 拒绝，且整条流水线不报任何错。
+#   对外分发走 notarize.sh，它会显式传入 Developer ID 哈希覆盖此处。
+#
+# 需要固定某个身份时用环境变量覆盖：RELEASE_SIGN_IDENTITY=<SHA-1>
+detect_release_identity() {
+  security find-identity -v -p codesigning 2>/dev/null \
+    | grep 'Apple Development' \
+    | head -1 \
+    | grep -oE '[0-9A-F]{40}'
+}
+
+if [ -n "${RELEASE_SIGN_IDENTITY:-}" ]; then
+  echo "-> 签名身份（显式指定）: $RELEASE_SIGN_IDENTITY"
+else
+  RELEASE_SIGN_IDENTITY="$(detect_release_identity)"
+  if [ -z "$RELEASE_SIGN_IDENTITY" ]; then
+    echo "✗ 钥匙串中找不到有效的 Apple Development 证书。" >&2
+    echo "  本地出包需要它注入 Team ID，否则照片库 TCC 无法授权。" >&2
+    echo "  创建：Xcode → Settings → Accounts → Manage Certificates → + → Apple Development" >&2
+    echo "  对外分发请改用: bash Scripts/notarize.sh（Developer ID + 公证）" >&2
+    exit 1
+  fi
+  echo "-> 签名身份（自动探测）: $RELEASE_SIGN_IDENTITY"
+fi
+
 ENTITLEMENTS="$ROOT/FrameScoop/FrameScoop.entitlements"
 
 cd "$ROOT"
