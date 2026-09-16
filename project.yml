@@ -10,8 +10,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "1.0.9"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "1.0.10"
+    CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     # 使用我们手写的 Info.plist，禁止 Xcode 自动生成

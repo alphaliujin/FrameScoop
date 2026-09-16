@@ -1054,27 +1054,42 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     // MARK: - 排序
 
-    /// 用于布局的连拍段：开启连拍筛选时仅保留连拍组（隐藏非连拍单张）
+    /// 用于布局的连拍段：开启连拍筛选时仅保留连拍组（隐藏非连拍单张），
+    /// 并按当前排序方向重排（段间 + 段内统一）—— 使「显示顺序 ≡ 排序方向」成立。
+    ///
+    /// 注意：网格**内容**（displayedPhotos 的连拍分支）与**布局**
+    /// （GridGeometry.burstFrames / BurstFlowLayout）都读这一个来源。
+    /// 二者顺序必须一致，否则框选命中与画面错位。
     var displayedBurstSegments: [BurstSegment] {
         guard showsBurstFilter else { return [] }
-        return burstSegments.filter { segment in
+        let bursts = burstSegments.filter { segment in
             if case .burst = segment { return true }
             return false
         }
+        return BurstDetectionService.ordered(bursts, order: sortOrder)
     }
 
     /// 重算缓存的展示结果（在 photos / sortOption / sortOrder / 连拍分组 / 模糊过滤变化时由 didSet 调用）
     private func rebuildDisplayedPhotos() {
         let base: [PhotoItem]
         if showsBurstFilter && !burstSegments.isEmpty {
-            // 连拍模式：按段扁平化（段内按时间升序，连拍组连续）；仅连拍组（单张已过滤）
-            base = displayedBurstSegments.flatMap { seg -> [PhotoItem] in
+            // 连拍模式：按段扁平化（连拍组连续）；仅连拍组（单张已过滤）。
+            // displayedBurstSegments 已按 sortOrder 重排（段间 + 段内统一），
+            // 故这里不再需要额外排序 —— 排序方向由它一处负责。
+            let segments = displayedBurstSegments
+            // 角标编号锚定「显示顺序」（降序时 1 = 组内最新），因此必须随重排一起算。
+            // 它依赖的是 sortOrder 而非分组结果，放在 applyBurstSegments 会在切方向时失同步。
+            burstPhotoNumbers = BurstDetectionService.numbers(for: segments)
+            base = segments.flatMap { seg -> [PhotoItem] in
                 switch seg {
                 case .single(let p): return [p]
                 case .burst(let ps): return ps
                 }
             }
         } else {
+            // 非连拍分支：角标不展示，清掉陈旧编号避免切文件夹后残留。
+            // 仅非空时写，避免过滤常开时每次重排都多一次无谓的 @Published 发布。
+            if !burstPhotoNumbers.isEmpty { burstPhotoNumbers = [:] }
             base = sort(photos)
         }
         // showsBlurOnly / showsEyeClosedOnly：任一开启即过滤；两者同开取交集（既模糊又闭眼）。
@@ -1428,18 +1443,14 @@ final class PhotoLibraryViewModel: ObservableObject {
         ))
     }
 
-    /// 应用连拍分组：更新 burstSegments + 计算组内编号（从 1 开始），再重算展示
+    /// 应用连拍分组：更新 burstSegments 后重算展示。
+    ///
+    /// 组内编号**不在这里**算：它锚定的是「显示顺序」（依赖 sortOrder），
+    /// 而本函数由分组结果变化触发。两者触发条件不同，放在这里会导致
+    /// 切换排序方向后角标与实际显示位置错位。编号统一由
+    /// rebuildDisplayedPhotos 在按 sortOrder 重排之后计算。
     private func applyBurstSegments(_ segments: [BurstSegment]) {
         burstSegments = segments
-        var numbers: [String: Int] = [:]
-        for segment in segments {
-            if case .burst(let group) = segment {
-                for (index, photo) in group.enumerated() {
-                    numbers[photo.id] = index + 1
-                }
-            }
-        }
-        burstPhotoNumbers = numbers
         rebuildDisplayedPhotos()
     }
 

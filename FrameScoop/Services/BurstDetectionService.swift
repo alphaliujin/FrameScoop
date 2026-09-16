@@ -62,6 +62,68 @@ struct BurstDetectionService {
         }
     }
 
+    // MARK: - 展示顺序
+
+    /// 把分组结果按展示方向重排：**段间与段内统一遵循 order**。
+    ///
+    /// 与 `group()` 的分工：`group()` 的升序是**算法前提**（连拍在时间轴上相邻，
+    /// 必须按时间扫描才能只比较相邻张，把 O(n²) 降到 O(n)），不代表展示顺序；
+    /// 本函数只负责**呈现**。二者分离，才能让「显示顺序 ≡ 排序方向」成为一条不变量。
+    ///
+    /// - Parameters:
+    ///   - segments: 分组结果（通常来自 `group()`，升序）
+    ///   - order: 用户选择的排序方向
+    /// - Returns: 重排后的段；**只改顺序，不改分组结果**（段数与组成员不变）
+    static func ordered(_ segments: [BurstSegment], order: SortOrder) -> [BurstSegment] {
+        let ascending = order == .ascending
+        return segments
+            .sorted { lhs, rhs in
+                // 段序以「段内最早时间」为基准：该值与段内排序无关，
+                // 且连拍段在时间轴上互不重叠，故按它排序可稳定复现升/降序。
+                let l = earliestDate(in: lhs), r = earliestDate(in: rhs)
+                return ascending ? (l < r) : (l > r)
+            }
+            .map { segment in
+                switch segment {
+                case .single(let photo):
+                    return .single(photo)
+                case .burst(let group):
+                    return .burst(group.sorted { lhs, rhs in
+                        let l = lhs.creationDate ?? .distantPast
+                        let r = rhs.creationDate ?? .distantPast
+                        return ascending ? (l < r) : (l > r)
+                    })
+                }
+            }
+    }
+
+    /// 段内最早时间（缺失日期视为 distantPast，与 group() 的回退一致）
+    private static func earliestDate(in segment: BurstSegment) -> Date {
+        switch segment {
+        case .single(let photo):
+            return photo.creationDate ?? .distantPast
+        case .burst(let group):
+            return group.map { $0.creationDate ?? .distantPast }.min() ?? .distantPast
+        }
+    }
+
+    /// 按**显示顺序**为连拍组内的照片编号（从 1 开始），用于缩略图左上角角标。
+    ///
+    /// 编号锚定显示位置而非拍摄序：降序展示时角标 1 指向组内最新的一张，
+    /// 从而角标永远顺着阅读方向读作 1,2,3，不会出现「一行读作 3,2,1」。
+    /// 注意：调用方须传入**已按展示方向重排**的段（即 `ordered(_:order:)` 的结果），
+    /// 否则角标会与实际显示位置错位。
+    static func numbers(for segments: [BurstSegment]) -> [String: Int] {
+        var numbers: [String: Int] = [:]
+        for segment in segments {
+            guard case .burst(let group) = segment else { continue }
+            for (index, photo) in group.enumerated() {
+                numbers[photo.id] = index + 1
+            }
+        }
+        return numbers
+    }
+
     // MARK: - dHash
 
     /// 差值哈希（64 bit）：缩到 9×8 灰度，比较水平相邻像素（左>右 置 1）。
