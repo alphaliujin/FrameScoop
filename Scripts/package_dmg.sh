@@ -123,11 +123,66 @@ cd "$ROOT"
 app_is_fresh() {
   local stamp="$APP_PATH/Contents/MacOS/$APP_NAME"
 
-  # TODO(你来实现)：下面是占位实现 —— 一律返回「陈旧」，即每次出包都先过一遍
-  # build.sh。这样做是安全的（xcodebuild 自己会做增量判断，产物已新时只是空转
-  # 十几秒），但完全没起到「跳过构建」的作用。替换成真正的判断逻辑。
-  : "$stamp"
-  return 1
+  # 监视范围：构建配置 + 源码 + 打包脚本。
+  #
+  # 为什么连 Scripts/ 一起监视（刻意的选择）：
+  #   「改了打包脚本」多数时候不影响二进制 —— 但 build.sh 里的 xcodebuild 参数
+  #   会影响（换 destination / 加编译 flag / 改 ARCHS 都会改变产物）。两个方向的
+  #   代价不对称：多监视一层 = 偶尔白构建一次（十几秒）；少监视一层 = 可能把
+  #   不匹配的二进制发出去，且全流程不报错。宁可比需要的宽一点。
+  #   想收窄就从 watch_rel 里去掉 Scripts。
+  # 不监视 FrameScoop.xcodeproj：它是 project.yml 的生成物，mtime 每次 xcodegen
+  #   都会刷新，监视它等于永远判「陈旧」；project.yml 本身已在列表里。
+  local watch_rel=(project.yml FrameScoop Scripts)
+  local watch=()
+  local p
+  for p in "${watch_rel[@]}"; do
+    watch+=("$ROOT/$p")
+  done
+
+  # 逃生舱：CI 或明确知道产物可信时跳过判断。刻意打印警告，不让它被无声用掉。
+  if [ "${SKIP_FRESHNESS_CHECK:-0}" = "1" ]; then
+    echo "  ⚠️  SKIP_FRESHNESS_CHECK=1 —— 跳过新旧判断，直接复用现有产物"
+    return 0
+  fi
+
+  if [ ! -f "$stamp" ]; then
+    echo "  · 产物不存在"
+    return 1
+  fi
+
+  # 监视路径缺失（仓库结构变了 / 不在预期目录）→ 无从判断，按「陈旧」处理
+  for p in "${watch[@]}"; do
+    if [ ! -e "$p" ]; then
+      echo "  · 监视路径缺失: $p"
+      return 1
+    fi
+  done
+
+  # 判据一：源码 mtime。
+  #   能看到**未提交**的工作区改动 —— 这正是 git 判据的盲区；
+  #   代价是 git checkout / 切分支会刷新 mtime → 误判陈旧 → 多构建一次（安全侧）。
+  #   排除 .DS_Store：Finder 浏览一下目录就会刷新它，不该因此触发重建。
+  if find "${watch[@]}" -name '.DS_Store' -prune -o -newer "$stamp" -print -quit 2>/dev/null \
+     | grep -q .; then
+    echo "  · 有文件比产物新（mtime 判据）"
+    return 1
+  fi
+
+  # 判据二：最近一次触及这些路径的提交时间。
+  #   不受 checkout 影响，但**看不见未提交改动** —— 单靠它会漏判（危险方向），
+  #   所以与判据一取「或」：任一认为陈旧即重建。
+  local git_epoch stamp_epoch
+  git_epoch="$(git -C "$ROOT" log -1 --format=%ct -- "${watch_rel[@]}" 2>/dev/null || true)"
+  if [ -n "$git_epoch" ]; then
+    stamp_epoch="$(stat -f %m "$stamp" 2>/dev/null || echo 0)"
+    if [ "$git_epoch" -gt "$stamp_epoch" ]; then
+      echo "  · 有比产物更新的提交（git 判据）"
+      return 1
+    fi
+  fi
+
+  return 0
 }
 
 # ---------------------------------------------------------------------------
