@@ -4,8 +4,12 @@
 # 打包 Release 版本为可拖拽安装的 .dmg（含 Applications 快捷方式）。
 #
 # 用法:
-#   bash Scripts/package_dmg.sh
+#   bash Scripts/package_dmg.sh                  # 本地出包（等价 PHASE=all）
 #   VOLNAME=FrameScoop bash Scripts/package_dmg.sh
+#
+#   公证发布走 notarize.sh，它会分两段调用本脚本（中间插入 app 的公证与装订）：
+#   PHASE=stage  bash Scripts/package_dmg.sh     # 准备 staging + 重签，保留 staging
+#   PHASE=finish bash Scripts/package_dmg.sh     # 从 staging 构建 DMG
 #
 # 产物: build/FrameScoop.dmg
 #
@@ -22,6 +26,22 @@ VOLNAME="${VOLNAME:-$APP_NAME}"
 DMG_PATH="$BUILD_DIR/$APP_NAME.dmg"
 RW_DMG="$BUILD_DIR/$APP_NAME-rw.dmg"
 
+# 两阶段执行 —— notarize.sh 必须先把 app 单独公证并装订，再构建 DMG：
+#   · app 只有被公证过才能装订票据（stapler 找不到票据会直接失败）；
+#   · 装订后的 app 必须参与 DMG 的构建，否则用户离线首次启动时 Gatekeeper
+#     要联网回查 Apple 才能放行（在线用户无感，离线直接失败）。
+#   · 而 app 的装订又不改变 cdhash（票据写在 Contents/CodeResources，在
+#     _CodeSignature 封条之外），所以「先装订再打进 DMG」完全合法。
+# 于是打包拆成两段，中间那段留给 notarize.sh 做 app 公证：
+#   all   （默认）= stage + finish，本地出包 / Apple Development 分发用
+#   stage         = 只准备 staging 并完成 Developer ID 重签，**保留** staging 目录
+#   finish        = 直接拿已有 staging 构建 DMG（不重新准备、不重签）
+PHASE="${PHASE:-all}"
+case "$PHASE" in
+  all|stage|finish) ;;
+  *) echo "✗ PHASE 只能是 all / stage / finish，当前: $PHASE" >&2; exit 1 ;;
+esac
+
 # 发布版重签身份：Apple Development 证书（带 Team Identifier）。
 # 原因：照片库走 Photos.framework，TCC 按签名登记 app；自签名 "FrameScoop Dev" 无 Team ID，
 #   requestAuthorization 直接返回 denied、不弹窗、也不出现在「系统设置 › 隐私 › 照片」列表。
@@ -34,46 +54,114 @@ ENTITLEMENTS="$ROOT/FrameScoop/FrameScoop.entitlements"
 
 cd "$ROOT"
 
-# 1. 确保 Release 产物存在
-if [ ! -d "$APP_PATH" ]; then
-  echo "-> 未找到 Release 产物，先构建…"
-  CONFIG=Release bash Scripts/build.sh
-fi
-if [ ! -d "$APP_PATH" ]; then
-  echo "✗ 构建产物不存在: $APP_PATH" >&2
-  exit 1
-fi
+# ---------------------------------------------------------------------------
+# app_is_fresh
+# 判断 $APP_PATH 是否足够新，可以直接拿去做 Developer ID 重签 + 公证。
+#
+# 返回 0 = 产物可信，跳过构建；非 0 = 产物陈旧，必须先重建。
+#
+# 背景（2026-09-16）：老版本这里只写了 `if [ ! -d "$APP_PATH" ]`，即产物只要
+# 「存在」就完全跳过构建。结果 build/DerivedData 里躺着一个 8 月的 Release
+# 产物，脚本会把它签上 Developer ID、公证、分发出去 —— 版本号是旧的，而且
+# 整条流水线（codesign / notarytool / stapler）全都会成功，不报任何错。
+#
+# 实现时要想清楚的取舍：
+#   1) 比较基准用哪个？
+#      · 源码 mtime（find -newer）：实现最简单，但 git checkout / 切分支会把
+#        mtime 全部刷新 → 误判为「陈旧」→ 多构建一次（安全，只是慢）。
+#      · git 提交时间（git log -1 --format=%ct -- <paths>）：不受 checkout 影响，
+#        但**看不见未提交的工作区改动** → 误判为「新」（危险）。
+#      两者取「或」（任一更新即视为陈旧）比只取一个稳。
+#   2) 监视哪些路径？至少 project.yml + FrameScoop/。要不要连 Scripts/ 一起算，
+#      取决于你认为「改了打包脚本」是否也该触发重建（本脚本自己改不影响二进制）。
+#   3) 拿什么当产物的时间戳？.app 目录 mtime 随内部文件增删变化，不稳；
+#      Contents/MacOS/$APP_NAME（可执行文件）更可靠。
+#   4) 留不留逃生舱（如 SKIP_FRESHNESS_CHECK=1）？CI 想强制跳过时有用，但也是
+#      绕过防线的口子。
+#
+# 实现提示：判断「有没有比 STAMP 更新的文件」用
+#   find <paths> -newer "$STAMP" -print -quit | grep -q .
+# 比逐个文件比较省事得多。
+# ---------------------------------------------------------------------------
+app_is_fresh() {
+  local stamp="$APP_PATH/Contents/MacOS/$APP_NAME"
 
-# 2. 准备临时目录：app + Applications 快捷方式
-echo "-> 准备 DMG 内容…"
-rm -rf "$STAGING" "$RW_DMG" "$DMG_PATH"
-mkdir -p "$STAGING"
-ditto "$APP_PATH" "$STAGING/$APP_NAME.app"          # ditto 保留 bundle 权限/资源
-ln -s /Applications "$STAGING/Applications"
-xattr -cr "$STAGING/$APP_NAME.app" 2>/dev/null || true   # 清除隔离属性
+  # TODO(你来实现)：下面是占位实现 —— 一律返回「陈旧」，即每次出包都先过一遍
+  # build.sh。这样做是安全的（xcodebuild 自己会做增量判断，产物已新时只是空转
+  # 十几秒），但完全没起到「跳过构建」的作用。替换成真正的判断逻辑。
+  : "$stamp"
+  return 1
+}
 
-# 2.5 重签为发布证书（注入 Team ID，使照片库 TCC 可授权）。
-#     硬运行（--options runtime）按证书类型区分：
-#     - Apple Development（本地分发）：勿加 —— Apple Development + HR 组合在 macOS 26
-#       上会导致照片库 TCC 静默拒绝（不弹窗、不出现在系统设置列表，2026-09-02 探针实测）。
-#     - Developer ID（公证分发，notarize.sh 传入）：必须加，公证硬性要求；--timestamp
-#       打 RFC3161 时间戳同为公证必需。
-echo "-> 用发布证书重签（注入 Team ID）…"
+# ---------------------------------------------------------------------------
+# 发布签名身份校验（stage / finish 两段都要用：finish 段靠 IS_DEVID 决定签不签 DMG）
+# ---------------------------------------------------------------------------
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$RELEASE_SIGN_IDENTITY"; then
   echo "✗ 找不到发布签名证书（SHA-1: ${RELEASE_SIGN_IDENTITY}）。" >&2
   echo "  运行 security find-identity -v -p codesigning，取证书哈希，" >&2
   echo "  通过 RELEASE_SIGN_IDENTITY 环境变量传入或更新本脚本。" >&2
   exit 1
 fi
+
+# 硬运行（--options runtime）按证书类型区分：
+#   - Apple Development（本地分发）：勿加 —— Apple Development + HR 组合在 macOS 26
+#     上会导致照片库 TCC 静默拒绝（不弹窗、不出现在系统设置列表，2026-09-02 探针实测）。
+#   - Developer ID（公证分发，notarize.sh 传入）：必须加，公证硬性要求；--timestamp
+#     打 RFC3161 时间戳同为公证必需。
+IS_DEVID=0
 RUNTIME_FLAGS=""
 if security find-identity -v -p codesigning 2>/dev/null \
   | grep "$RELEASE_SIGN_IDENTITY" | grep -q "Developer ID"; then
+  IS_DEVID=1
   RUNTIME_FLAGS="--options runtime --timestamp"
 fi
-codesign --force --sign "$RELEASE_SIGN_IDENTITY" $RUNTIME_FLAGS \
-  --entitlements "$ENTITLEMENTS" "$STAGING/$APP_NAME.app"
-codesign --verify --verbose "$STAGING/$APP_NAME.app" 2>&1 | tail -2
-codesign -dvv "$STAGING/$APP_NAME.app" 2>&1 | grep -E "Authority=Apple Development|Authority=Developer ID|TeamIdentifier"
+
+# ===========================================================================
+# 阶段 A：准备 staging + 用发布证书重签 app
+#   跑完本段后 staging 目录里是一个「已签名、但尚未公证」的 app。
+#   PHASE=stage 到此为止，把公证 / 装订交给 notarize.sh，再回来跑阶段 B。
+# ===========================================================================
+if [ "$PHASE" != "finish" ]; then
+
+  # A1. 确保 Release 产物存在且不陈旧
+  if [ ! -d "$APP_PATH" ] || ! app_is_fresh; then
+    echo "-> Release 产物缺失或陈旧，先构建…"
+    CONFIG=Release bash Scripts/build.sh
+  fi
+  if [ ! -d "$APP_PATH" ]; then
+    echo "✗ 构建产物不存在: $APP_PATH" >&2
+    exit 1
+  fi
+
+  # A2. 准备临时目录：app + Applications 快捷方式
+  #     注意这里**不删** $DMG_PATH：PHASE=stage 结束时还没有替代品，
+  #     提前删掉会让「跑到一半失败」变成「连旧的可用 DMG 都没了」。
+  #     旧 DMG 的清理推迟到阶段 B 真正要写新文件之前。
+  echo "-> 准备 DMG 内容…"
+  rm -rf "$STAGING" "$RW_DMG"
+  mkdir -p "$STAGING"
+  ditto "$APP_PATH" "$STAGING/$APP_NAME.app"          # ditto 保留 bundle 权限/资源
+  ln -s /Applications "$STAGING/Applications"
+  xattr -cr "$STAGING/$APP_NAME.app" 2>/dev/null || true   # 清除隔离属性
+
+  # A3. 重签为发布证书（注入 Team ID，使照片库 TCC 可授权）
+  echo "-> 用发布证书重签（注入 Team ID）…"
+  codesign --force --sign "$RELEASE_SIGN_IDENTITY" $RUNTIME_FLAGS \
+    --entitlements "$ENTITLEMENTS" "$STAGING/$APP_NAME.app"
+  codesign --verify --verbose "$STAGING/$APP_NAME.app" 2>&1 | tail -2
+  codesign -dvv "$STAGING/$APP_NAME.app" 2>&1 | grep -E "Authority=Apple Development|Authority=Developer ID|TeamIdentifier"
+fi
+
+# ===========================================================================
+# 阶段 B：从 staging 构建 DMG（Developer ID 分发时同时对 DMG 本身签名）
+# ===========================================================================
+if [ "$PHASE" != "stage" ]; then
+
+if [ ! -d "$STAGING/$APP_NAME.app" ]; then
+  echo "✗ 找不到 staging 中的 app: $STAGING/$APP_NAME.app" >&2
+  echo "  PHASE=finish 需要先跑一次 PHASE=stage（notarize.sh 会按顺序自动调用）。" >&2
+  exit 1
+fi
 
 # 3. 创建可读写 DMG
 echo "-> 创建 DMG…"
@@ -112,9 +200,22 @@ hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || hdiutil detach force "$MOUNT_DIR"
 
 # 5. 转换为压缩只读（UDZO）
 echo "-> 压缩为只读 DMG…"
+rm -f "$DMG_PATH"    # PHASE=finish 时阶段 A 没跑过，不会替你清旧产物
 hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" >/dev/null
 rm -f "$RW_DMG"
 rm -rf "$STAGING"
+
+# 5.5 对 DMG 本身做代码签名（仅 Developer ID 分发）。
+#      不签的话 spctl -a -t open --context context:primary-signature 会判
+#      "rejected / source=no usable signature" —— 裸镜像是个未签名的 code object，
+#      Gatekeeper 没有签名对象可评估。
+#      必须在提交公证**之前**做：公证针对的就是签名后的那串字节。
+#      DMG 不是可执行镜像，所以不加 --options runtime（硬运行只对可执行文件有意义）。
+if [ "$IS_DEVID" = "1" ]; then
+  echo "-> 对 DMG 签名…"
+  codesign --force --sign "$RELEASE_SIGN_IDENTITY" --timestamp "$DMG_PATH"
+  codesign --verify --verbose=2 "$DMG_PATH" 2>&1 | tail -1
+fi
 
 # 6. 校验
 echo "-> 校验 DMG…"
@@ -125,3 +226,5 @@ echo "✅ DMG 生成完成"
 echo "   路径: $DMG_PATH"
 echo "   大小: $(du -h "$DMG_PATH" | cut -f1)"
 echo "   内容: $APP_NAME.app + Applications（拖拽到应用程序文件夹安装）"
+
+fi   # ← 阶段 B 结束
