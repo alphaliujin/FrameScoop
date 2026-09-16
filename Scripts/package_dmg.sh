@@ -25,6 +25,10 @@ STAGING="$BUILD_DIR/dmg-staging"
 VOLNAME="${VOLNAME:-$APP_NAME}"
 DMG_PATH="$BUILD_DIR/$APP_NAME.dmg"
 RW_DMG="$BUILD_DIR/$APP_NAME-rw.dmg"
+# 「上次构建完成时间」标记，供 app_is_fresh 当比较基准。
+# 不能拿产物文件的 mtime 当基准：xcodebuild 是增量的，无改动时完全不碰产物，
+# 于是「输入比产物新」永远成立 → 每次出包都空跑一遍构建（详见 app_is_fresh 注释）。
+BUILD_STAMP="$BUILD_DIR/.last-build-$CONFIG"
 
 # 两阶段执行 —— notarize.sh 必须先把 app 单独公证并装订，再构建 DMG：
 #   · app 只有被公证过才能装订票据（stapler 找不到票据会直接失败）；
@@ -151,6 +155,23 @@ app_is_fresh() {
     return 1
   fi
 
+  # 比较基准：优先用「上次构建完成时间」标记，而不是可执行文件的 mtime。
+  #
+  # 为什么不能用产物 mtime 当基准（2026-09-16 实测踩到）：
+  #   xcodebuild 是增量的 —— 没有实际改动时它**完全不碰**产物文件，可执行文件的
+  #   mtime 保持不动。而输入文件（比如改过的打包脚本）却有了更新的 mtime，于是
+  #   「输入比产物新」永远成立，每次出包都判陈旧 → 空跑一遍构建。优化完全失效，
+  #   且表现得很隐蔽：exit 0、日志干净、产物正确，只是「跳过构建」这条路径
+  #   永远不会被执行到。
+  #   而一次 no-op 的 xcodebuild 恰恰**证明**了产物与源码一致 —— 所以「上次构建
+  #   完成时间」才是语义正确的基准。标记缺失时退回可执行文件 mtime（偏保守：
+  #   宁可多构建一次，不可漏构建）。
+  local ref="$BUILD_STAMP"
+  if [ ! -f "$ref" ]; then
+    echo "  · 无构建时间标记，退回以产物 mtime 为基准"
+    ref="$stamp"
+  fi
+
   # 监视路径缺失（仓库结构变了 / 不在预期目录）→ 无从判断，按「陈旧」处理
   for p in "${watch[@]}"; do
     if [ ! -e "$p" ]; then
@@ -163,21 +184,21 @@ app_is_fresh() {
   #   能看到**未提交**的工作区改动 —— 这正是 git 判据的盲区；
   #   代价是 git checkout / 切分支会刷新 mtime → 误判陈旧 → 多构建一次（安全侧）。
   #   排除 .DS_Store：Finder 浏览一下目录就会刷新它，不该因此触发重建。
-  if find "${watch[@]}" -name '.DS_Store' -prune -o -newer "$stamp" -print -quit 2>/dev/null \
+  if find "${watch[@]}" -name '.DS_Store' -prune -o -newer "$ref" -print -quit 2>/dev/null \
      | grep -q .; then
-    echo "  · 有文件比产物新（mtime 判据）"
+    echo "  · 有源码比上次构建新（mtime 判据）"
     return 1
   fi
 
   # 判据二：最近一次触及这些路径的提交时间。
   #   不受 checkout 影响，但**看不见未提交改动** —— 单靠它会漏判（危险方向），
   #   所以与判据一取「或」：任一认为陈旧即重建。
-  local git_epoch stamp_epoch
+  local git_epoch ref_epoch
   git_epoch="$(git -C "$ROOT" log -1 --format=%ct -- "${watch_rel[@]}" 2>/dev/null || true)"
   if [ -n "$git_epoch" ]; then
-    stamp_epoch="$(stat -f %m "$stamp" 2>/dev/null || echo 0)"
-    if [ "$git_epoch" -gt "$stamp_epoch" ]; then
-      echo "  · 有比产物更新的提交（git 判据）"
+    ref_epoch="$(stat -f %m "$ref" 2>/dev/null || echo 0)"
+    if [ "$git_epoch" -gt "$ref_epoch" ]; then
+      echo "  · 有比上次构建更新的提交（git 判据）"
       return 1
     fi
   fi
@@ -219,6 +240,11 @@ if [ "$PHASE" != "finish" ]; then
   if [ ! -d "$APP_PATH" ] || ! app_is_fresh; then
     echo "-> Release 产物缺失或陈旧，先构建…"
     CONFIG=Release bash Scripts/build.sh
+    # 记下构建完成时间，作为下一次 app_is_fresh 的比较基准。
+    # 注意这里**即使 xcodebuild 是 no-op 也要 touch** —— 一次 no-op 同样证明了
+    # 产物与源码一致，正是「新鲜」的信号（见 app_is_fresh 内注释）。
+    # set -e 保证这行只在 build.sh 成功后才执行。
+    touch "$BUILD_STAMP"
   fi
   if [ ! -d "$APP_PATH" ]; then
     echo "✗ 构建产物不存在: $APP_PATH" >&2
