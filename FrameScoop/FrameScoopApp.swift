@@ -32,8 +32,10 @@ struct FrameScoopApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
-            // 用 "添加文件夹" 替换默认 "New" 菜单项
-            CommandGroup(replacing: .newItem) {
+            // 注意：这里必须用 after: 而不是 replacing: —— .newItem 同时是系统「新建窗口」(⌘N) 的位置，
+            // 替换掉它会移除重开主窗口的唯一菜单入口（关窗后应用驻留后台，却再也开不回来），
+            // 会被 App Store 以 Guideline 4 - Design 拒审（1.0.10 实测被拒的正是这一条）。
+            CommandGroup(after: .newItem) {
                 Button("添加文件夹…") {
                     NotificationCenter.default.post(name: .addFolderRequested, object: nil)
                 }
