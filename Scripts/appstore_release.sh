@@ -55,6 +55,29 @@ fi
 PROFILE_UUID="$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)"
 echo "-> App Store 描述文件: $PROFILE_UUID"
 
+# 1.5 版本一致性校验。
+#   project.yml 是版本号的唯一真源，但它的值由 XcodeGen 在**生成期**烘焙进 .xcodeproj
+#   （而 .xcodeproj 是 gitignore 的生成物）。改了 project.yml 却没重跑生成时，xcodebuild
+#   读到的仍是旧值 —— **不报错**，只是打出一个版本号不对的包，直到 ASC 报 build 号重复
+#   才暴露（或更糟：真的发出去一个版本号不对的包）。
+#   build.sh 会自己重跑生成，本脚本不会（archive 依赖既有 xcodeproj），故在此显式拦截。
+yml_val() { grep -E "^[[:space:]]*$1:" "$ROOT/project.yml" | head -1 | sed -E 's/[^:]*:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/'; }
+PROJ_SETTINGS="$(xcodebuild -project "$ROOT/$APP_NAME.xcodeproj" -scheme "$APP_NAME" \
+  -configuration Release -showBuildSettings 2>/dev/null)"
+proj_val() { echo "$PROJ_SETTINGS" | grep -E "^[[:space:]]+$1 = " | head -1 | sed -E 's/.*= //'; }
+
+YML_MARKETING="$(yml_val MARKETING_VERSION)";   PROJ_MARKETING="$(proj_val MARKETING_VERSION)"
+YML_BUILD="$(yml_val CURRENT_PROJECT_VERSION)"; PROJ_BUILD="$(proj_val CURRENT_PROJECT_VERSION)"
+if [ -z "$PROJ_MARKETING" ] || [ "$YML_MARKETING" != "$PROJ_MARKETING" ] || [ "$YML_BUILD" != "$PROJ_BUILD" ]; then
+  echo "✗ 版本不一致，拒绝出包：" >&2
+  echo "    project.yml        : $YML_MARKETING ($YML_BUILD)" >&2
+  echo "    已生成的 .xcodeproj : ${PROJ_MARKETING:-读取失败} (${PROJ_BUILD:-读取失败})" >&2
+  echo "  project.yml 的值由 XcodeGen 在生成期写入 .xcodeproj；本脚本不会自动重跑生成。" >&2
+  echo "  请先执行:  bash Scripts/generate_project.sh" >&2
+  exit 1
+fi
+echo "-> 版本: $YML_MARKETING ($YML_BUILD)"
+
 # 2. Archive（用 Distribution 证书 + 描述文件手动签名，命令行设置覆盖工程配置）
 echo "========================================"
 echo " 1) Archive (Apple Distribution 签名)"
