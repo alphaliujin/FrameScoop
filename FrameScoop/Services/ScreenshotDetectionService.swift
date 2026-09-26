@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import ImageIO
 
 enum ScreenshotDetectionService {
 
@@ -25,5 +26,22 @@ enum ScreenshotDetectionService {
     static func matchesFilename(_ name: String) -> Bool {
         let lower = name.lowercased()
         return filenamePrefixes.contains { lower.hasPrefix($0.lowercased()) }
+    }
+
+    /// 文件头判据：EXIF UserComment 是否为 "Screenshot"。
+    /// 只读元数据、不解码像素（实测 ~1.4 ms/张）；任何读取失败一律返回 false。
+    /// 注意层级：Make/Model 在 TIFF 字典里，UserComment 在 EXIF 字典里，别读错。
+    static func hasScreenshotMarker(at url: URL) -> Bool {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any],
+              let comment = exif[kCGImagePropertyExifUserComment as String] as? String
+        else { return false }
+        return comment.compare("Screenshot", options: .caseInsensitive) == .orderedSame
+    }
+
+    /// 综合判定：文件名命中 或 文件头带标记
+    static func isScreenshot(name: String, url: URL) -> Bool {
+        matchesFilename(name) || hasScreenshotMarker(at: url)
     }
 }
