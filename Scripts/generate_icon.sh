@@ -15,16 +15,19 @@
 #   1.0.10 及其之前的构建（无资源目录）在 ASC 列表全是空白，
 #   而加了资源目录的 1.0.11 build 3 是列表里唯一有图标的。
 #
-# 已知代价（不要试图"修"掉，试过两条路都撞墙）：
+# 同时产出 FrameScoop/Resources/AppIcon.icns（完整 11 块，含 1024）。
+# 该 .icns **不参与资源拷贝**（见 project.yml 的 excludes），而是由 project.yml 里
+# 的 postBuildScript 在 actool 之后、代码签名之前，覆写掉 actool 生成的那份截断版本。
+#
+# 为什么需要这一步：
 #   actool 除了把 AppIcon 编进 Assets.car，还会在 bundle 里生成一份
 #   **截断的** AppIcon.icns（只有 ic04/ic07/ic11/ic13 四个块，最大 256px），
 #   并把 CFBundleIconFile 改指向它。Apple 提取商店页美术（iconAssetToken）
-#   读的就是这份 .icns，于是从 1024 掉到 256。
-#   试过：① 给 appiconset 改名 → actool 仍覆写 CFBundleIconFile；
-#         ② 不设 ASSETCATALOG_COMPILER_APPICON_NAME → actool 干脆把条目
-#            整个排除出 Assets.car，图标又不显示了。
-#   即"图标可见"与"美术 1024"由 actool 绑成一体，二者不可兼得 —— 除非
-#   往构建里插签名前的后处理（尚未做）。
+#   读的就是这份 .icns，于是美术从 1024 掉到 256。
+#   试过另两条路都失败：① 给 appiconset 改名 → actool 仍覆写 CFBundleIconFile；
+#   ② 不设 ASSETCATALOG_COMPILER_APPICON_NAME → 条目被整体排除出 Assets.car，
+#   图标又不显示了。即「图标可见」与「美术 1024」被 actool 绑成一体，无法用配置分开，
+#   只能在其后覆写文件。
 #
 # 用法: bash Scripts/generate_icon.sh
 #   换图标：替换 FC.png 后删掉 AppIcon.appiconset 再跑本脚本。
@@ -33,16 +36,19 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SET_DIR="$ROOT/FrameScoop/Assets.xcassets/AppIcon.appiconset"
+ICNS_PATH="$ROOT/FrameScoop/Resources/AppIcon.icns"
 SOURCE_PNG="$ROOT/FC.png"          # 用户提供的图标源（可选）
 
-if [ -f "$SET_DIR/icon_512x512@2x.png" ]; then
+if [ -f "$SET_DIR/icon_512x512@2x.png" ] && [ -f "$ICNS_PATH" ]; then
   echo "图标已存在，跳过生成: $SET_DIR"
   exit 0
 fi
 
-mkdir -p "$SET_DIR"
+mkdir -p "$SET_DIR" "$(dirname "$ICNS_PATH")"
 WORK="$(mktemp -d)"
 PNG_1024="$WORK/icon_512x512@2x.png"   # 1024 像素，对应 512@2x 槽位
+ICONSET="$WORK/AppIcon.iconset"
+mkdir -p "$ICONSET"
 
 # ---------- 1. 取得 1024×1024 主图 ----------
 if [ -f "$SOURCE_PNG" ]; then
@@ -109,7 +115,14 @@ while [ $i -lt ${#ENTRIES[@]} ]; do
 done
 echo "  ✓ 已生成 appiconset 各尺寸"
 
-# ---------- 3. 写 Contents.json ----------
+# ---------- 3. 同一套 PNG 另存为 iconset，打包成完整 .icns ----------
+# 这份 .icns 不参与资源拷贝（见 project.yml 的 excludes），而是在构建的
+# postBuildScript 阶段覆写 actool 生成的那份截断版本 —— 见下方"已知代价"。
+cp "$SET_DIR"/icon_*.png "$ICONSET"/
+iconutil -c icns "$ICONSET" -o "$ICNS_PATH"
+echo "  ✓ 已生成完整 .icns: $(basename "$ICNS_PATH")"
+
+# ---------- 4. 写 Contents.json ----------
 {
   printf '{\n  "images" : [\n'
   i=0

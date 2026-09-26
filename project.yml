@@ -11,7 +11,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.0.11"
-    CURRENT_PROJECT_VERSION: "5"
+    CURRENT_PROJECT_VERSION: "6"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     # 使用我们手写的 Info.plist，禁止 Xcode 自动生成
@@ -32,6 +32,10 @@ targets:
         excludes:
           - "Info.plist"
           - "FrameScoop.entitlements"
+          # 完整 .icns 不参与资源拷贝：actool 会往同一路径写它那份截断版本，
+          # 两者并存会让产物字节随干净/增量构建而变。改由下面的 postBuildScript
+          # 在 actool 之后覆写，见该脚本注释。
+          - "Resources/AppIcon.icns"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.framescoop.app
@@ -68,13 +72,13 @@ targets:
         # 实测：1.0.10 及其之前无资源目录的构建在 ASC 列表全是空白，
         # 加了资源目录的 1.0.11 build 3 是列表里唯一有图标的。
         #
-        # **已知代价**：actool 还会在 bundle 内生成一份**截断的** AppIcon.icns
+        # **配套动作**：actool 还会在 bundle 内生成一份**截断的** AppIcon.icns
         # （仅 ic04/ic07/ic11/ic13，最大 256px）并把 CFBundleIconFile 指向它；
-        # Apple 提取商店页美术（iconAssetToken）读的正是这份，故从 1024 降为 256。
+        # Apple 提取商店页美术（iconAssetToken）读的正是这份，会把美术从 1024 压到 256。
         # 试过两条绕法都失败：改名 → actool 仍覆写 CFBundleIconFile；
         # 不设 ASSETCATALOG_COMPILER_APPICON_NAME → 条目被整体排除出 Assets.car。
-        # 即「图标可见」与「美术 1024」被 actool 绑成一体。要两者兼得需在**签名前**
-        # 加后处理（用完整 .icns 覆写 actool 那份并修正 CFBundleIconFile），尚未实现。
+        # 即「图标可见」与「美术 1024」被 actool 绑成一体，无法用配置分开。
+        # 解法见本 target 末尾的 postBuildScript：在**签名前**用完整 .icns 覆写它那份。
         # 详细验证方法见记忆 framescoop-icon-approach。
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
@@ -83,6 +87,31 @@ targets:
         # 支持通用二进制（Apple Silicon + Intel）
         ARCHS: "$(ARCHS_STANDARD)"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+    # actool 会把资源目录里的 AppIcon 编进 Assets.car（商店界面靠它显示图标），
+    # 但**同时**导出一份截断的 AppIcon.icns（只有 4 个块、最大 256px）并写进
+    # bundle，而 Apple 提取商店页美术（iconAssetToken）读的正是这份 —— 于是美术
+    # 从 1024 掉到 256。
+    #
+    # 这里在其后覆写为 generate_icon.sh 产出的完整 .icns（11 个块，含 1024）。
+    # 只改文件内容、不动 Info.plist：actool 已把 CFBundleIconFile 指向 AppIcon，
+    # 而完整件的文件名同样是 AppIcon.icns，指针天然正确。
+    #
+    # 必须跑在代码签名**之前**，否则改 bundle 内容会让签名失效。
+    # postBuildScripts 是阶段列表末尾的 Run Script，签名在其后，顺序成立。
+    postBuildScripts:
+      - name: 覆写为完整 AppIcon.icns
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          SRC="$SRCROOT/FrameScoop/Resources/AppIcon.icns"
+          DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/AppIcon.icns"
+          if [ ! -f "$SRC" ]; then
+            echo "error: 找不到完整图标 $SRC —— 先跑 bash Scripts/generate_icon.sh" >&2
+            exit 1
+          fi
+          cp "$SRC" "$DST"
+          echo "已覆写 AppIcon.icns 为完整版本（$(stat -f%z "$DST") 字节）"
 
   FrameScoopTests:
     type: bundle.unit-test
