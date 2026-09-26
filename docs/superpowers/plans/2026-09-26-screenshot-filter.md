@@ -17,6 +17,10 @@
 - 测试命令固定为：
   `xcodebuild test -scheme FrameScoop -destination 'platform=macOS' 2>&1 | grep -E "Executed|TEST (SUCCEEDED|FAILED)"`
 - 基线：既有 34 个测试全绿，任何一步都不得让它们回归。
+- **测试计数实际值与本文各步骤的预期值有偏移**：Task 1 的评审修复轮新增了一个钉住测试
+  （`企业微信截图`），故该类由 12 个变 13 个。以实际为准：**Task 1 后 47**（34 + 13）、
+  **Task 2 后及最终均为 55**（34 + 21）。Task 1 自身步骤里写的 12/46 是计划时的原值，
+  保留不改。Tasks 3/4 不新增测试，计数维持 55。
 - 代码注释用中文，与仓库既有风格一致。
 - 默认不写解释性注释；仅在「为什么」非显然处写（如层级陷阱、性能量级差异）。
 
@@ -346,7 +350,7 @@ xcodebuild test -scheme FrameScoop -destination 'platform=macOS' -only-testing:F
 xcodebuild test -scheme FrameScoop -destination 'platform=macOS' -only-testing:FrameScoopTests/ScreenshotDetectionTests 2>&1 | grep -E "error:|Executed|TEST (SUCCEEDED|FAILED)"
 ```
 
-预期：`Executed 20 tests, with 0 failures`，`** TEST SUCCEEDED **`。
+预期：`Executed 21 tests, with 0 failures`，`** TEST SUCCEEDED **`。
 
 - [ ] **Step 5: 提交**
 
@@ -580,7 +584,7 @@ macOS 系统截屏写入 EXIF UserComment=\"Screenshot\"，实测穿透格式转
 xcodebuild test -scheme FrameScoop -destination 'platform=macOS' 2>&1 | grep -E "error:|warning: .*never used|Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)"
 ```
 
-预期：`Executed 54 tests, with 0 failures`（34 既有 + 20 新增），`** TEST SUCCEEDED **`，无编译错误。
+预期：`Executed 55 tests, with 0 failures`（34 既有 + 21 新增），`** TEST SUCCEEDED **`，无编译错误。
 
 - [ ] **Step 9: 运行时手测**
 
@@ -698,7 +702,7 @@ struct PhotoBadges: View {
 xcodebuild test -scheme FrameScoop -destination 'platform=macOS' 2>&1 | grep -E "error:|Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)"
 ```
 
-预期：`Executed 54 tests, with 0 failures`（34 既有 + 20 新增），`** TEST SUCCEEDED **`。
+预期：`Executed 55 tests, with 0 failures`（34 既有 + 21 新增），`** TEST SUCCEEDED **`。
 
 - [ ] **Step 6: 运行时手测**
 
@@ -726,6 +730,6 @@ git commit -m "feat: 截屏缩略图角标（灰色 display 图标）
 
 ## 验证（全部任务完成后）
 
-- [ ] 全部测试绿：`xcodebuild test -scheme FrameScoop -destination 'platform=macOS' 2>&1 | grep -E "Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)"` → `Executed 54 tests`（34 既有 + 20 新增），`** TEST SUCCEEDED **`
+- [ ] 全部测试绿：`xcodebuild test -scheme FrameScoop -destination 'platform=macOS' 2>&1 | grep -E "Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)"` → `Executed 55 tests`（34 既有 + 21 新增），`** TEST SUCCEEDED **`
 - [ ] `bash Scripts/run.sh` 起 app，逐条走完 Task 3 Step 9 与 Task 4 Step 5 的手测清单
 - [ ] 确认 spec 的「范围外」未被越界实现（无自动删除、无阈值调节、未改 `PhotoAnalysisStore`、未改 `PhotoItem`）
