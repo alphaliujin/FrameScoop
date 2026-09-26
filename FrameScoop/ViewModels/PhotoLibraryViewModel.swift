@@ -79,6 +79,7 @@ final class PhotoLibraryViewModel: ObservableObject {
                 // 需重新触发检测：detect 内部按 mtime 校验，将变化项纳入 toCompute 重算。
                 rebuildDisplayedPhotos()
                 if hasMtimeChanges(oldValue, photos) {
+                    scanScreenshots()
                     if showsBurstFilter {
                         detectBurstsIfNeeded()
                     } else if showsBlurFilter || showsEyeClosedFilter {
@@ -226,6 +227,16 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published private(set) var closedEyePhotoIDs: Set<String> = []
     /// 有睁有闭 -> 标黄 eye.slash
     @Published private(set) var partialClosedEyePhotoIDs: Set<String> = []
+
+    /// 截屏筛选三态（全部/只看截屏/隐藏截屏）。
+    /// 与既有三个筛选正交、可同时生效，无需互斥 didSet。
+    @Published var screenshotFilter: ScreenshotFilter = .off {
+        didSet { rebuildDisplayedPhotos() }
+    }
+    /// 截屏 id 集合（唯一真源；PhotoItem 不加字段，与 blurryPhotoIDs 同构）
+    @Published private(set) var screenshotPhotoIDs: Set<String> = []
+    /// 是否正在扫描文件夹（驱动边栏进度文案）
+    @Published private(set) var isScreenshotScanning: Bool = false
 
     /// 图片数据导入：文件夹加载后自动预计算连拍 dHash + 人脸模糊分。
     /// 每张照片从 512px 缩略图一次取图同时算两份结果；侧栏底部显示「图片数据导入：xx/xxx 张」。
@@ -622,11 +633,13 @@ final class PhotoLibraryViewModel: ObservableObject {
                 self.photosAccessDenied = (status == .denied || status == .restricted)
                 return
             }
-            let items = await PhotosLibraryService.shared.loadAllPhotos()
+            let (items, screenshotIDs) = await PhotosLibraryService.shared.loadAllPhotos()
             #if DEBUG
             self.dbg("[DBG] photosLibrary loaded items=\(items.count)")
             #endif
             guard token == self.loadToken else { return }
+            // 先于 photos 赋值：photos 的 didSet 触发扫描，扫描入口按当前列表剪枝
+            self.screenshotPhotoIDs = screenshotIDs
             self.photos = items
             self.isLoading = false
             self.photosAccessDenied = false
@@ -1106,6 +1119,12 @@ final class PhotoLibraryViewModel: ObservableObject {
         if showsSelectedOnly {
             result = result.filter { selectedPhotoIDs.contains($0.id) }
         }
+        // 截屏筛选（三态）：与上面各筛选正交，可叠加
+        switch screenshotFilter {
+        case .off:     break
+        case .only:    result = result.filter { screenshotPhotoIDs.contains($0.id) }
+        case .exclude: result = result.filter { !screenshotPhotoIDs.contains($0.id) }
+        }
         displayedPhotos = result
     }
 
@@ -1119,6 +1138,64 @@ final class PhotoLibraryViewModel: ObservableObject {
             if prev[p.id] != p.modificationDate { return true }
         }
         return false
+    }
+
+    // MARK: - 截屏扫描
+
+    /// 扫描任务句柄：切文件夹时 cancel 旧任务
+    private var screenshotScanTask: Task<Void, Never>?
+    /// 扫描版本号：切文件夹递增，回调校验丢弃过期结果
+    private var screenshotScanToken = 0
+
+    /// 扫描截屏并填充 screenshotPhotoIDs。
+    /// 与 precomputeAnalysis 的区别：只读文件头（~1.4ms/张）、不落盘、不做并发调度
+    /// ——顺序扫 + 每 64 张回主线程合并即可（3000 张约 4 秒），
+    /// 16 路并发换不回可感知收益，只带来调度复杂度。
+    /// 照片库来源已在加载时赋值，此处只扫 .folder 项；但剪枝对两个来源都要做。
+    private func scanScreenshots() {
+        screenshotScanTask?.cancel()
+        screenshotScanToken += 1
+        let token = screenshotScanToken
+
+        let photos = self.photos
+        // 剪枝：切节点后残留旧 id 会让「只看截屏」滤出错项
+        let liveIDs = Set(photos.map { $0.id })
+        screenshotPhotoIDs = screenshotPhotoIDs.filter { liveIDs.contains($0) }
+
+        let folders = photos.filter { $0.sourceKind == .folder }
+        guard !folders.isEmpty else {
+            isScreenshotScanning = false
+            return
+        }
+        isScreenshotScanning = true
+
+        screenshotScanTask = Task.detached(priority: .utility) { [weak self] in
+            var batch: [String] = []
+            for photo in folders {
+                // 已取消（切了文件夹）：直接返回，状态由新一轮扫描接管
+                if Task.isCancelled { return }
+                guard let url = photo.url else { continue }
+                if ScreenshotDetectionService.isScreenshot(name: photo.name, url: url) {
+                    batch.append(photo.id)
+                }
+                if batch.count >= 64 {
+                    let b = batch
+                    batch = []
+                    await MainActor.run { [weak self] in
+                        guard let self, token == self.screenshotScanToken else { return }
+                        self.screenshotPhotoIDs.formUnion(b)
+                        self.rebuildDisplayedPhotos()
+                    }
+                }
+            }
+            let rest = batch
+            await MainActor.run { [weak self] in
+                guard let self, token == self.screenshotScanToken else { return }
+                self.screenshotPhotoIDs.formUnion(rest)
+                self.isScreenshotScanning = false
+                self.rebuildDisplayedPhotos()
+            }
+        }
     }
 
     // MARK: - 图片数据导入（连拍 dHash + 人脸模糊 预计算）
@@ -1137,6 +1214,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 与筛选开关解耦--无论是否开启筛选都先算好；磁盘已存且 mtime 未变的直接复用，仅算缺失的。
     /// 侧栏底部显示「图片数据导入：xx/xxx 张」。切文件夹 cancel + 递增 token 取消在途任务。
     private func precomputeAnalysis() {
+        // 截屏扫描只读文件头、比 dHash/Vision 便宜两个数量级，与本函数同点触发
+        scanScreenshots()
         // 入口即重置完成态：空文件夹、切文件夹、重算都不得残留上一轮的完成标记
         showPrecomputeSummary = false
         let photos = self.photos

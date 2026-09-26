@@ -27,6 +27,20 @@ struct FilterSidebarView: View {
                         .help("一次 Vision 检测人脸，按拉普拉斯方差判断人脸模糊；左上角标红/黄 face.dashed")
                     Toggle("闭眼检测", isOn: $library.showsEyeClosedFilter)
                         .help("与人脸模糊筛选共享同一次 Vision，按眼睛纵横比(EAR)判断闭眼；左上角标红/黄 eye.slash")
+
+                    Picker("截屏", selection: $library.screenshotFilter) {
+                        ForEach(ScreenshotFilter.allCases, id: \.self) { f in
+                            Text(f.label).tag(f)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("按 EXIF 标记与文件名识别截屏；「只看」用于清理，「隐藏」用于选片")
+
+                    Text(library.isScreenshotScanning
+                         ? "正在识别截屏…已发现 \(library.screenshotPhotoIDs.count) 张"
+                         : "共 \(library.screenshotPhotoIDs.count) 张截屏")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 if !library.selectedPhotoIDs.isEmpty {

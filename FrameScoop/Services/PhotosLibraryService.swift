@@ -62,15 +62,21 @@ final class PhotosLibraryService {
     // MARK: - 枚举
 
     /// 枚举照片库全部图片资产，转为 PhotoItem（未排序，由上层排序）。
-    func loadAllPhotos() async -> [PhotoItem] {
-        guard status == .authorized else { return [] }
+    /// 同一次枚举顺带收集截屏资产 id——mediaSubtypes 是系统权威字段，零额外成本。
+    func loadAllPhotos() async -> (items: [PhotoItem], screenshotIDs: Set<String>) {
+        guard status == .authorized else { return ([], []) }
         let result = PHAsset.fetchAssets(with: .image, options: nil)
         var items: [PhotoItem] = []
+        var screenshotIDs: Set<String> = []
         items.reserveCapacity(result.count)
         result.enumerateObjects { asset, _, _ in
-            items.append(self.makeItem(from: asset))
+            let item = self.makeItem(from: asset)
+            items.append(item)
+            if asset.mediaSubtypes.contains(.photoScreenshot) {
+                screenshotIDs.insert(item.id)   // 复用 item.id，保证与 PhotoItem 的 id 格式一致
+            }
         }
-        return items
+        return (items, screenshotIDs)
     }
 
     private func makeItem(from asset: PHAsset) -> PhotoItem {
