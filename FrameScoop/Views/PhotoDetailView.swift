@@ -103,7 +103,8 @@ struct PhotoDetailView: View {
                     isRedBlurry: library.showsBlurFilter && library.blurryPhotoIDs.contains(photo.id),
                     isYellowBlurry: library.showsBlurFilter && library.partialBlurryPhotoIDs.contains(photo.id),
                     isRedEye: library.showsEyeClosedFilter && library.closedEyePhotoIDs.contains(photo.id),
-                    isYellowEye: library.showsEyeClosedFilter && library.partialClosedEyePhotoIDs.contains(photo.id)
+                    isYellowEye: library.showsEyeClosedFilter && library.partialClosedEyePhotoIDs.contains(photo.id),
+                    isScreenshot: library.screenshotPhotoIDs.contains(photo.id)
                 )
                     .scaleEffect(1.6, anchor: .topLeading)
                     .padding(.top, 56)

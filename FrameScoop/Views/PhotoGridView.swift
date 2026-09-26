@@ -133,6 +133,9 @@ struct PhotoGridView: View {
             isYellowBlurry: blurOn && library.partialBlurryPhotoIDs.contains(photo.id),
             isRedEye: eyeClosedOn && library.closedEyePhotoIDs.contains(photo.id),
             isYellowEye: eyeClosedOn && library.partialClosedEyePhotoIDs.contains(photo.id),
+            // 不做筛选门控：三态下「只看」会让每张都带角标、「隐藏」又一张不剩，
+            // 两种模式里角标都不提供信息；默认（全部）的混合视图才是它唯一有用的场景。
+            isScreenshot: library.screenshotPhotoIDs.contains(photo.id),
             onDoubleTap: { openInDetail(photo) },
             onSingleTap: { library.clickSelection(photo, shift: NSEvent.modifierFlags.contains(.shift)) },
             onReveal: { library.revealInFinder(photo) },
@@ -203,6 +206,7 @@ struct PhotoGridView: View {
     let isYellowBlurry: Bool
     let isRedEye: Bool
     let isYellowEye: Bool
+    let isScreenshot: Bool
 
     var onDoubleTap: () -> Void
     var onSingleTap: () -> Void
@@ -221,6 +225,7 @@ struct PhotoGridView: View {
         && lhs.isYellowBlurry == rhs.isYellowBlurry
         && lhs.isRedEye == rhs.isRedEye
         && lhs.isYellowEye == rhs.isYellowEye
+        && lhs.isScreenshot == rhs.isScreenshot
     }
 
     var body: some View {
@@ -234,7 +239,8 @@ struct PhotoGridView: View {
                     isRedBlurry: isRedBlurry,
                     isYellowBlurry: isYellowBlurry,
                     isRedEye: isRedEye,
-                    isYellowEye: isYellowEye
+                    isYellowEye: isYellowEye,
+                    isScreenshot: isScreenshot
                 )
                 .padding(2)
                 .allowsHitTesting(false)
@@ -344,8 +350,9 @@ struct PhotoGridView: View {
 
 // MARK: - 图片徽标
 
-/// 图片徽标视图：连拍编号 + 人脸模糊 face.dashed + 闭眼 eye.slash，横向排列于左上角。
-/// 网格缩略图与详情页大图共用；各项按对应筛选开关门控（开关关闭则不显示该项）。
+/// 图片徽标视图：连拍编号 + 人脸模糊 face.dashed + 闭眼 eye.slash + 截屏 display，横向排列于左上角。
+/// 网格缩略图与详情页大图共用；编号/模糊/闭眼按对应筛选开关门控（开关关闭则不显示该项），
+/// 截屏角标不做门控（三态筛选下门控会在「只看」时全量冗余、「隐藏」时永不出现）。
 /// 底层数据由预计算始终算好，与开关解耦。调用方负责定位、缩放与 allowsHitTesting。
 struct PhotoBadges: View {
     let number: Int?
@@ -353,10 +360,11 @@ struct PhotoBadges: View {
     let isYellowBlurry: Bool
     let isRedEye: Bool
     let isYellowEye: Bool
+    let isScreenshot: Bool
 
     var body: some View {
         Group {
-            if number != nil || isRedBlurry || isYellowBlurry || isRedEye || isYellowEye {
+            if number != nil || isRedBlurry || isYellowBlurry || isRedEye || isYellowEye || isScreenshot {
                 HStack(spacing: 2) {
                     if let number {
                         Text("\(number)")
@@ -375,6 +383,10 @@ struct PhotoBadges: View {
                         badge(symbol: "eye.slash.fill", bg: .red, fg: .white)
                     } else if isYellowEye {
                         badge(symbol: "eye.slash.fill", bg: .yellow, fg: .black)
+                    }
+                    if isScreenshot {
+                        // 中性灰：截屏是「类别」不是「问题」，不与红/黄的严重程度语义混用
+                        badge(symbol: "display", bg: .gray, fg: .white)
                     }
                 }
             }
