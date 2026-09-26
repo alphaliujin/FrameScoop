@@ -18,15 +18,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <!-- 图标两条路径并存，且**同源**：
-         · CFBundleIconName → Assets.car 里的 AppIcon（资源目录编译而来）
-         · CFBundleIconFile → bundle 内的 AppIcon.icns（actool 从同一资源目录生成）
-         两者都由 Actool 从 Assets.xcassets/AppIcon.appiconset 产出，故一致且可重复。
-         该 appiconset 由 Scripts/generate_icon.sh 从项目根 FC.png 生成。
-         （CFBundleIconFile 亦会被 actool 的 partial info plist 覆写为同名值。） -->
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
+    <string>AppIcon.icns</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleInfoDictionaryVersion</key>
