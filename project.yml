@@ -11,7 +11,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.0.11"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     # 使用我们手写的 Info.plist，禁止 Xcode 自动生成
@@ -59,27 +59,23 @@ targets:
         # 代码改动重签后 TCC（照片库等）授权保持有效，Xcode 调试稳定
         CODE_SIGN_IDENTITY: "FrameScoop Dev"
         CODE_SIGN_STYLE: Manual
-        # App 图标是手搓的 FrameScoop/Resources/AppIcon.icns
-        # （由 Scripts/generate_icon.sh 从项目根 FC.png 生成各尺寸后 iconutil 打包），
-        # Info.plist 只用 CFBundleIconFile 引用它。**故意不用资源目录，别改回去。**
+        # App 图标来源：资源目录 FrameScoop/Assets.xcassets/AppIcon.appiconset
+        # （由 Scripts/generate_icon.sh 从项目根 FC.png 生成）。
         #
-        # 为什么不用资源目录 AppIcon + CFBundleIconName —— 2026-09-26 实测教训：
-        #   Apple 的 App Store 图标提取读的是 **bundle 里的 .icns**，不是 Assets.car。
-        #   而 actool 从资源目录 AppIcon 导出的 .icns 是**残缺的**：只有
-        #   ic04/ic07/ic11/ic13 四个块（最大 256px），ic05/ic08/ic09/ic10/ic12/ic14
-        #   （含 512 与 1024）全部缺失 —— 尽管 Assets.car 里大图齐全。
-        #   后果实测：1.0.10 的构建（手搓完整 .icns）iconAssetToken = 1024×1024；
-        #   1.0.11 加入资源目录后 = **256×256**，商店页图标会发虚。
-        #   （参考：本机 5 个规整的 MAS 应用确实都有 CFBundleIconName + 资源目录，
-        #    但那只说明它们"有"该配置，不等于 Apple"靠"它取图。）
+        # **为什么必须用资源目录**（2026-09-26 实测）：App Store 的可见界面 ——
+        # ASC 的「构建版本上传」列表、商店搜索结果 —— 只有资源目录 AppIcon 才渲染
+        # 得出图标；只用手搓 .icns 时这些位置是**空白占位图**。
+        # 实测：1.0.10 及其之前无资源目录的构建在 ASC 列表全是空白，
+        # 加了资源目录的 1.0.11 build 3 是列表里唯一有图标的。
         #
-        # 另外两点，避免重蹈：
-        #   · 手搓 .icns 与 actool 会争抢 Contents/Resources/AppIcon.icns 同一路径，
-        #     所以两者**不能并存**——并存时产出的字节随干净/增量构建而变
-        #     （实测 137KB vs 1.9MB）。只用 .icns 时生产者唯一，构建可重复。
-        #   · 此处原注释写「Info.plist 同时声明 CFBundleIconFile 和 CFBundleIconName」，
-        #     那句话描述的修复**从未落地**（git log -S CFBundleIconName 可证该键从未
-        #     出现过）。现已删除该说法——不是"忘记补"，而是实测证明补了有害。
+        # **已知代价**：actool 还会在 bundle 内生成一份**截断的** AppIcon.icns
+        # （仅 ic04/ic07/ic11/ic13，最大 256px）并把 CFBundleIconFile 指向它；
+        # Apple 提取商店页美术（iconAssetToken）读的正是这份，故从 1024 降为 256。
+        # 试过两条绕法都失败：改名 → actool 仍覆写 CFBundleIconFile；
+        # 不设 ASSETCATALOG_COMPILER_APPICON_NAME → 条目被整体排除出 Assets.car。
+        # 即「图标可见」与「美术 1024」被 actool 绑成一体。要两者兼得需在**签名前**
+        # 加后处理（用完整 .icns 覆写 actool 那份并修正 CFBundleIconFile），尚未实现。
+        # 详细验证方法见记忆 framescoop-icon-approach。
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
         ENABLE_PREVIEWS: YES
