@@ -57,8 +57,8 @@ struct PhotoGridView: View {
             ScrollView {
                 Group {
                     // 任一「只显示」过滤开启时统一用普通流式展示（BurstFlowLayout 读的是
-                    // 未过滤的 displayedBurstSegments，只显示模糊/闭眼/选中时须改用
-                    // 已过滤的 displayedPhotos，否则网格会显示全部照片、与胶片条不一致）
+                    // 未过滤的 displayedBurstSegments，只显示模糊/闭眼/选中、或截屏筛选非
+                    // 「全部」时须改用已过滤的 displayedPhotos，否则网格会显示全部照片、与胶片条不一致）
                     if usesBurstLayout {
                         BurstFlowLayout(
                             spacing: 4,
@@ -97,6 +97,7 @@ struct PhotoGridView: View {
     private var usesBurstLayout: Bool {
         library.showsBurstFilter && !library.showsBlurOnly
             && !library.showsEyeClosedOnly && !library.showsSelectedOnly
+            && library.screenshotFilter == .off
             && !library.displayedBurstSegments.isEmpty
     }
 
