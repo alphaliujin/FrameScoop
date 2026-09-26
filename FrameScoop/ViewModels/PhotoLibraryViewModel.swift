@@ -1151,6 +1151,8 @@ final class PhotoLibraryViewModel: ObservableObject {
     /// 与 precomputeAnalysis 的区别：只读文件头（~1.4ms/张）、不落盘、不做并发调度
     /// ——顺序扫 + 每 64 张回主线程合并即可（3000 张约 4 秒），
     /// 16 路并发换不回可感知收益，只带来调度复杂度。
+    /// 扫描结束时以本次结果作为文件夹来源的权威判定（见 ScreenshotScanMerge.merged）：
+    /// 原地被覆盖成非截屏的文件会被摘除，集合不会只增不减。
     /// 照片库来源已在加载时赋值，此处只扫 .folder 项；但剪枝对两个来源都要做。
     private func scanScreenshots() {
         screenshotScanTask?.cancel()
@@ -1168,30 +1170,47 @@ final class PhotoLibraryViewModel: ObservableObject {
             return
         }
         isScreenshotScanning = true
+        let folderIDs = Set(folders.map { $0.id })
 
         screenshotScanTask = Task.detached(priority: .utility) { [weak self] in
+            // 本次扫描命中的全部 id：结束时作为文件夹来源的权威结果
+            var found: Set<String> = []
+            // 自上次回主线程以来的命中批次 + 已扫描张数（流式进度用）
             var batch: [String] = []
+            var scanned = 0
             for photo in folders {
                 // 已取消（切了文件夹）：直接返回，状态由新一轮扫描接管
                 if Task.isCancelled { return }
-                guard let url = photo.url else { continue }
-                if ScreenshotDetectionService.isScreenshot(name: photo.name, url: url) {
+                // 批次按「已扫描张数」推进：截屏稀疏的文件夹（3000 张里 20 张截屏）
+                // 也能边扫边回填，而不是扫完才跳变
+                scanned += 1
+                if let url = photo.url,
+                   ScreenshotDetectionService.isScreenshot(name: photo.name, url: url) {
                     batch.append(photo.id)
+                    found.insert(photo.id)
                 }
-                if batch.count >= 64 {
-                    let b = batch
-                    batch = []
-                    await MainActor.run { [weak self] in
-                        guard let self, token == self.screenshotScanToken else { return }
-                        self.screenshotPhotoIDs.formUnion(b)
-                        self.rebuildDisplayedPhotos()
+                if scanned >= 64 {
+                    scanned = 0
+                    if !batch.isEmpty {
+                        let b = batch
+                        batch = []
+                        await MainActor.run { [weak self] in
+                            guard let self, token == self.screenshotScanToken else { return }
+                            self.screenshotPhotoIDs.formUnion(b)
+                            self.rebuildDisplayedPhotos()
+                        }
                     }
                 }
             }
-            let rest = batch
+            let foundIDs = found
             await MainActor.run { [weak self] in
                 guard let self, token == self.screenshotScanToken else { return }
-                self.screenshotPhotoIDs.formUnion(rest)
+                // 单次赋值完成权威合并，避免中间态闪烁
+                self.screenshotPhotoIDs = ScreenshotScanMerge.merged(
+                    existing: self.screenshotPhotoIDs,
+                    folderIDs: folderIDs,
+                    found: foundIDs
+                )
                 self.isScreenshotScanning = false
                 self.rebuildDisplayedPhotos()
             }
