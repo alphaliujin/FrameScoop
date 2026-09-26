@@ -25,6 +25,10 @@ final class ScreenshotDetectionTests: XCTestCase {
         XCTAssertTrue(ScreenshotDetectionService.matchesFilename("微信截图_20260926143000.png"))
     }
 
+    func testEnterpriseWeChatScreenshotName() {
+        XCTAssertTrue(ScreenshotDetectionService.matchesFilename("企业微信截图_20260926143000.png"))
+    }
+
     func testQQScreenshotName() {
         XCTAssertTrue(ScreenshotDetectionService.matchesFilename("QQ截图20260926143000.png"))
     }

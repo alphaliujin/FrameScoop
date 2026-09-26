@@ -13,10 +13,10 @@ import Foundation
 enum ScreenshotDetectionService {
 
     /// 文件名前缀特征。用前缀而非子串：子串会让「我的截图旅行.jpg」误命中。
-    /// 注意「微信截图」「QQ截图」须整体入列：它们的文件名以品牌名开头，
-    /// 只列「截图」前缀是匹配不到的。
+    /// 注意「微信截图」「企业微信截图」「QQ截图」须整体入列：它们的文件名
+    /// 以品牌名开头，只列「截图」前缀是匹配不到的。
     static let filenamePrefixes = [
-        "截屏", "屏幕截图", "截图", "微信截图", "QQ截图",
+        "截屏", "屏幕截图", "截图", "微信截图", "企业微信截图", "QQ截图",
         "Screenshot", "Screen Shot",
         "Snipaste", "CleanShot", "Shottr",
     ]
